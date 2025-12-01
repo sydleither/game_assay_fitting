@@ -1,0 +1,3 @@
+[submodule "EGT_HAL"]
+	path = EGT_HAL
+	url = https://github.com/sydleither/EGT_HAL
