@@ -3,11 +3,12 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from scipy.stats import theilslopes
 import seaborn as sns
 
 from game_assay.game_analysis import count_cells, calculate_growth_rates, calculate_payoffs
-from utils import get_cell_types
+from utils import get_cell_types, get_growth_rate_window
 
 
 def plot_counts(save_loc, df, cell_colors, extra=""):
@@ -99,25 +100,35 @@ def plot_freq_depend(save_loc, df, cell_types, cell_colors, extra=""):
     plt.close()
 
 
-def main():
-    # Read in arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
-    parser.add_argument(
-        "-exp", "--exp_name", type=str, default="220405_S-E9_gfp_vs_BRAF_mcherry_Gefitinib"
+def plot_gamespace(save_loc, df, hue):
+    palette = sns.color_palette("hls", len(df[hue].unique()))
+    hue_order = sorted(df[hue].unique())
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+    sns.scatterplot(
+        data=df,
+        x="Advantage_1",
+        y="Advantage_0",
+        s=200,
+        hue=hue,
+        palette=palette,
+        hue_order=hue_order,
+        ax=ax,
     )
-    #TODO automatic GR window or use overview.xlsx's
-    parser.add_argument("-grs", "--growth_rate_start", type=int, default=24)
-    parser.add_argument("-gre", "--growth_rate_end", type=int, default=72)
-    args = parser.parse_args()
+    ax.axvline(0, color="black")
+    ax.axhline(0, color="black")
+    ax.legend(bbox_to_anchor=(1.01, 1))
+    fig.patch.set_alpha(0.0)
+    plt.savefig(f"{save_loc}/gamespace_{hue}.png", bbox_inches="tight", dpi=200)
 
-    # Set data io parameters
-    data_dir = args.data_dir
-    exp_name = args.exp_name
+
+def individual_analysis(data_dir, exp_name):
+    # Create images directory
     save_loc = f"{data_dir}/{exp_name}/images"
     if not os.path.exists(save_loc):
         os.mkdir(save_loc)
-    gr_window = [args.growth_rate_start, args.growth_rate_end]
+
+    # Get growth rate window
+    gr_window = get_growth_rate_window(data_dir, exp_name)
 
     # Count cells
     counts_df = count_cells(data_dir, exp_name)
@@ -146,7 +157,56 @@ def main():
     )
 
     # Calculate payoff matrix parameters
-    payoff_df = calculate_payoffs(data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{cell_types[0]}")
+    payoff_df = calculate_payoffs(
+        data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}"
+    )
+
+
+def replicate_analysis(data_dir):
+    # Get payoff information of each experiment
+    df = pd.DataFrame()
+    for exp_name in os.listdir(data_dir):
+        if "PIK3CA" in exp_name: #TEMP
+            continue
+        if os.path.isfile(f"{data_dir}/{exp_name}") or exp_name == "layout_files":
+            continue
+        print(exp_name)
+        gr_window = get_growth_rate_window(data_dir, exp_name)
+        sensitive_type, resistant_type = get_cell_types(exp_name)
+        cell_types = [sensitive_type, resistant_type]
+        counts_df = count_cells(data_dir, exp_name)
+        growth_rate_df = calculate_growth_rates(
+            data_dir, exp_name, counts_df, gr_window, cell_types
+        )
+        df_exp = calculate_payoffs(
+            data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}"
+        )
+        df_exp["Experiment"] = exp_name
+        df = pd.concat([df, df_exp])
+    df = df[df["DrugConcentration"] == 0.0]
+
+    # Validate S-E9-gfp is always player 1
+    type1s = df["Type1"].unique()
+    if len(type1s) > 1:
+        raise ValueError(f"Inconsistent payoff matrices: type 1s of {type1s}")
+
+    # Plot game spaces
+    plot_gamespace(data_dir, df, "Experiment")
+    plot_gamespace(data_dir, df, "Type2")
+
+
+def main():
+    # Read in arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
+    parser.add_argument("-exp", "--exp_name", type=str, default=None)
+    args = parser.parse_args()
+
+    # Run specified analysis type
+    if args.exp_name:
+        individual_analysis(args.data_dir, args.exp_name)
+    else:
+        replicate_analysis(args.data_dir)
 
 
 if __name__ == "__main__":

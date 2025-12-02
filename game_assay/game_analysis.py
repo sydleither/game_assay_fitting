@@ -16,16 +16,8 @@ from game_assay.game_archive_utils import (
 )
 
 
-def count_cells(data_dir, dir_curr_experiment):
-    cell_count_path = os.path.join(
-        data_dir,
-        dir_curr_experiment,
-        "%s_counts_df_processed.csv" % dir_curr_experiment.split("/")[-1],
-    )
-    if os.path.exists(cell_count_path):
-        return pd.read_csv(cell_count_path)
-
-    exp_parts = dir_curr_experiment.split("_")
+def read_overview_xlsx(data_dir, exp_name):
+    exp_parts = exp_name.split("_")
     overview_df = pd.read_excel(f"{data_dir}/overview.xlsx")
     overview_df["Date"] = overview_df["Date"].dt.strftime("%y%m%d")
     experiment = overview_df[
@@ -36,6 +28,19 @@ def count_cells(data_dir, dir_curr_experiment):
         & (overview_df["Fluorophore 2"] == exp_parts[5])
         & (overview_df["Drug"] == exp_parts[6])
     ].to_dict("records")[0]
+    return experiment
+
+
+def count_cells(data_dir, dir_curr_experiment):
+    cell_count_path = os.path.join(
+        data_dir,
+        dir_curr_experiment,
+        "%s_counts_df_processed.csv" % dir_curr_experiment.split("/")[-1],
+    )
+    if os.path.exists(cell_count_path):
+        return pd.read_csv(cell_count_path)
+    
+    experiment = read_overview_xlsx(data_dir, dir_curr_experiment)
 
     # Assemble the count file
     dir_curr_experiment = os.path.join(data_dir, dir_curr_experiment)

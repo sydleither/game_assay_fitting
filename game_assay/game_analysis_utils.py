@@ -334,9 +334,12 @@ def estimate_game_parameters(growth_rate_df, fraction_col="Fraction_Sensitive", 
     # Transform into pay-off matrix entries. To do so, we need to find out the direction of the x-axis (i.e. whether
     # it's increasing for Type 1 or Type 2 as we go left to right).
     # The growth rate of the "index" population should be nan when their fraction is 0.
-    no_deteced_growth_rate_df = growth_rate_df[growth_rate_df[growth_rate_col].isna()]
-    avg_frac_when_no_growth_rate = no_deteced_growth_rate_df.groupby(cell_type_col).mean(numeric_only=True)[fraction_col]
-    index_cell_type = avg_frac_when_no_growth_rate.idxmin()
+    try:
+        no_deteced_growth_rate_df = growth_rate_df[growth_rate_df[growth_rate_col].isna()]
+        avg_frac_when_no_growth_rate = no_deteced_growth_rate_df.groupby(cell_type_col).mean(numeric_only=True)[fraction_col]
+        index_cell_type = avg_frac_when_no_growth_rate.idxmin()
+    except:
+        index_cell_type = cell_type_list[0]
     # Now we can compute the pay-off matrix entries
     cell_type_list = growth_rate_df[cell_type_col].unique() if cell_type_list is None else cell_type_list
     params_dict = {}
