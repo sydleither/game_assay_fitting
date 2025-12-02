@@ -172,7 +172,7 @@ def calculate_growth_rates(data_dir, exp_dir, counts_df, growth_rate_window, cel
             well_id=well_id,
             cell_type=cell_type,
             growth_rate_window=growth_rate_window,
-            count_threshold=10,
+            count_threshold=100,
         )
         fractions_dict = compute_population_fraction(
             counts_df[counts_df["PlateId"] == plate_id],

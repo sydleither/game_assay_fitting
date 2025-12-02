@@ -88,7 +88,7 @@ def plot_freq_depend(save_loc, df, cell_types, cell_colors, extra=""):
             y = df_ct["GrowthRate"].values
             slope, intercept, _, _ = theilslopes(y, x)
             ax.scatter(x, y, color=cell_colors[cell_type], alpha=0.7)
-            x_fit = np.linspace(min(x), max(x), 100)
+            x_fit = np.linspace(0, 1, 100)
             y_fit = intercept + slope * x_fit
             ax.plot(x_fit, y_fit, color=cell_colors[cell_type], linestyle="--")
         ax.set_title(f"Drug Concentration: {conc}")
@@ -97,6 +97,113 @@ def plot_freq_depend(save_loc, df, cell_types, cell_colors, extra=""):
     fig.tight_layout()
     fig.patch.set_alpha(0.0)
     plt.savefig(f"{save_loc}/freq_depend{extra}.png", dpi=200)
+    plt.close()
+
+
+def plot_overview(
+    save_loc,
+    exp_name,
+    counts_df,
+    growth_rate_df,
+    payoff_df,
+    gr_window,
+    cell_types,
+    cell_colors,
+    dc=0.0,
+):
+    # Only for 1 drug concentration
+    counts_df = counts_df[counts_df["DrugConcentration"] == dc]
+    growth_rate_df = growth_rate_df[growth_rate_df["DrugConcentration"] == dc]
+    payoff_df = payoff_df[payoff_df["DrugConcentration"] == dc]
+
+    # Set figure dimensions
+    plates = sorted(counts_df["PlateId"].unique())
+    plate_rows = 1
+    plate_cols = len(plates)
+    well_rows = sorted(counts_df["RowId"].unique())
+    well_cols = sorted(counts_df["ColumnId"].unique())
+    grid_rows = plate_rows * len(well_rows)
+    grid_cols = plate_cols * len(well_cols) + 1
+
+    # Initalize figure
+    fig, ax = plt.subplots(
+        grid_rows,
+        grid_cols,
+        figsize=(3 * grid_cols, 3 * grid_rows),
+        sharex=False,
+        sharey=False,
+        layout="compressed",
+    )
+
+    # Plot count data with growth rate overlaid
+    for p, plate in enumerate(plates):
+        for r, row in enumerate(well_rows):
+            for c, col in enumerate(well_cols):
+                df = counts_df[
+                    (counts_df["PlateId"] == plate)
+                    & (counts_df["RowId"] == row)
+                    & (counts_df["ColumnId"] == col)
+                ]
+                ax_curr = ax[r, p * len(well_cols) + c]
+                sns.scatterplot(
+                    data=df,
+                    x="Time",
+                    y="Count",
+                    hue="CellType",
+                    marker="o",
+                    s=50,
+                    legend=False,
+                    ax=ax_curr,
+                    palette=cell_colors,
+                )
+                for cell_type in cell_types:
+                    gr = growth_rate_df[
+                        (growth_rate_df["PlateId"] == plate)
+                        & (growth_rate_df["RowId"] == row)
+                        & (growth_rate_df["ColumnId"] == col)
+                        & (growth_rate_df["CellType"] == cell_type)
+                    ].to_dict("records")[0]
+                    x = np.arange(gr_window[0], gr_window[1], 0.1)
+                    y = gr["GrowthRate"] * (x - gr_window[0]) + gr["Intercept"]
+                    ax_curr.plot(x, np.exp(y), color="black", alpha=0.5, linewidth=3)
+                ax_curr.set(title=f"Plate {plate} Well {row}{col}")
+
+    # Plot frequency dependence dynamics
+    payoff = payoff_df.to_dict("records")[0]
+    ax_curr = ax[0, grid_cols - 1]
+    for i, cell_type in enumerate(cell_types):
+        df = growth_rate_df[growth_rate_df["CellType"] == cell_type].copy()
+        df = df.dropna(subset=[f"Fraction_{cell_types[0]}", "GrowthRate"])
+        if len(df) < 2:
+            continue
+        x = df[f"Fraction_{cell_types[0]}"].values
+        y = df["GrowthRate"].values
+        ax_curr.scatter(x, y, color=cell_colors[cell_type], alpha=0.75)
+        if i == 0:
+            y_0 = payoff["r1"] + payoff["c21"]
+            y_1 = payoff["r1"] + payoff["c21"] - payoff["c21"]
+        else:
+            y_0 = payoff["r2"]
+            y_1 = payoff["r2"] + payoff["c12"]
+        ax_curr.plot([0, 1], [y_0, y_1], color=cell_colors[cell_type], linestyle="--")
+        ax_curr.set(title="Frequency Dependence")
+        ax_curr.set(xlabel=f"Fraction {cell_types[0]}", ylabel="Growth Rate")
+
+    # Plot location in game space
+    ax_curr = ax[1, grid_cols - 1]
+    ax_curr.scatter(payoff["Advantage_1"], payoff["Advantage_0"], s=50, c="black")
+    ax_curr.axvline(0, color="black")
+    ax_curr.axhline(0, color="black")
+    ax_curr.set(title="Game Space")
+    ax_curr.set(xlabel=f"Advantage {cell_types[1]}", ylabel=f"Advantage {cell_types[0]}")
+
+    # Hide empty plots
+    for i in range(2, grid_rows):
+        ax[i, grid_cols - 1].axis("off")
+
+    # Format figure and save
+    fig.suptitle(f"{exp_name} {dc} Drug Concentration")
+    plt.savefig(f"{save_loc}/{exp_name}_{dc}dc.png", bbox_inches="tight", dpi=200)
     plt.close()
 
 
@@ -161,38 +268,49 @@ def individual_analysis(data_dir, exp_name):
         data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}"
     )
 
+    # Plot overview of drug-free results
+    plot_overview(
+        save_loc,
+        exp_name,
+        counts_df,
+        growth_rate_df,
+        payoff_df,
+        gr_window,
+        cell_types,
+        cell_colors,
+    )
+
 
 def replicate_analysis(data_dir):
     # Get payoff information of each experiment
-    df = pd.DataFrame()
+    payoff_df = pd.DataFrame()
     for exp_name in os.listdir(data_dir):
-        if "PIK3CA" in exp_name: #TEMP
+        if "PIK3CA" in exp_name:  # TEMP
             continue
         if os.path.isfile(f"{data_dir}/{exp_name}") or exp_name == "layout_files":
             continue
-        print(exp_name)
         gr_window = get_growth_rate_window(data_dir, exp_name)
         sensitive_type, resistant_type = get_cell_types(exp_name)
         cell_types = [sensitive_type, resistant_type]
-        counts_df = count_cells(data_dir, exp_name)
-        growth_rate_df = calculate_growth_rates(
-            data_dir, exp_name, counts_df, gr_window, cell_types
+        counts_df_exp = count_cells(data_dir, exp_name)
+        growth_rate_df_exp = calculate_growth_rates(
+            data_dir, exp_name, counts_df_exp, gr_window, cell_types
         )
-        df_exp = calculate_payoffs(
-            data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}"
+        payoff_df_exp = calculate_payoffs(
+            data_dir, exp_name, growth_rate_df_exp, cell_types, f"Fraction_{sensitive_type}"
         )
-        df_exp["Experiment"] = exp_name
-        df = pd.concat([df, df_exp])
-    df = df[df["DrugConcentration"] == 0.0]
+        payoff_df_exp["Experiment"] = exp_name
+        payoff_df = pd.concat([payoff_df, payoff_df_exp])
+    payoff_df = payoff_df[payoff_df["DrugConcentration"] == 0.0]
 
     # Validate S-E9-gfp is always player 1
-    type1s = df["Type1"].unique()
+    type1s = payoff_df["Type1"].unique()
     if len(type1s) > 1:
         raise ValueError(f"Inconsistent payoff matrices: type 1s of {type1s}")
 
     # Plot game spaces
-    plot_gamespace(data_dir, df, "Experiment")
-    plot_gamespace(data_dir, df, "Type2")
+    plot_gamespace(data_dir, payoff_df, "Experiment")
+    plot_gamespace(data_dir, payoff_df, "Type2")
 
 
 def main():
