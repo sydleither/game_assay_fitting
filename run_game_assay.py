@@ -7,11 +7,17 @@ import pandas as pd
 from scipy.stats import theilslopes
 import seaborn as sns
 
-from game_assay.game_analysis import count_cells, calculate_growth_rates, calculate_payoffs
+from game_assay.game_archive_utils import load_spatial_data
+from game_assay.game_analysis import (
+    calculate_counts,
+    calculate_growth_rates,
+    calculate_locations,
+    calculate_payoffs,
+)
 from utils import get_cell_types, get_growth_rate_window
 
 
-def plot_counts(save_loc, df, cell_colors, extra=""):
+def plot_counts(save_loc, df, cell_colors):
     for plate_id in df["PlateId"].unique():
         df_plate = df[df["PlateId"] == plate_id]
         well_letters = sorted(df_plate["WellId"].str[0].unique())
@@ -37,7 +43,7 @@ def plot_counts(save_loc, df, cell_colors, extra=""):
                 ax[wl][wn].set(title=well)
         fig.patch.set_alpha(0.0)
         fig.tight_layout()
-        plt.savefig(f"{save_loc}/plate{plate_id}_counts{extra}.png")
+        plt.savefig(f"{save_loc}/plate{plate_id}_counts.png")
         plt.close()
 
 
@@ -106,7 +112,6 @@ def plot_overview(
     counts_df,
     growth_rate_df,
     payoff_df,
-    gr_window,
     cell_types,
     cell_colors,
     dc=0.0,
@@ -136,6 +141,7 @@ def plot_overview(
     )
 
     # Plot count data with growth rate overlaid
+    y_max = counts_df["Count"].max()
     for p, plate in enumerate(plates):
         for r, row in enumerate(well_rows):
             for c, col in enumerate(well_cols):
@@ -163,10 +169,12 @@ def plot_overview(
                         & (growth_rate_df["ColumnId"] == col)
                         & (growth_rate_df["CellType"] == cell_type)
                     ].to_dict("records")[0]
-                    x = np.arange(gr_window[0], gr_window[1], 0.1)
-                    y = gr["GrowthRate"] * (x - gr_window[0]) + gr["Intercept"]
-                    ax_curr.plot(x, np.exp(y), color="black", alpha=0.5, linewidth=3)
-                ax_curr.set(title=f"Plate {plate} Well {row}{col}")
+                    gr_window = (gr["GrowthRate_window_start"], gr["GrowthRate_window_end"])
+                    if not np.isnan(gr_window[0]):
+                        x = np.arange(gr_window[0], gr_window[1], 0.1)
+                        y = gr["GrowthRate"] * (x - gr_window[0]) + gr["Intercept"]
+                        ax_curr.plot(x, np.exp(y), color="black", alpha=0.5, linewidth=3)
+                ax_curr.set(title=f"Plate {plate} Well {row}{col}", ylim=(0, y_max))
 
     # Plot frequency dependence dynamics
     payoff = payoff_df.to_dict("records")[0]
@@ -207,6 +215,40 @@ def plot_overview(
     plt.close()
 
 
+def plot_spatial(save_loc, data_dir, df, cell_colors, times):
+    for plate_id in df["PlateId"].unique():
+        df_plate = df[df["PlateId"] == plate_id]
+        well_ids = sorted(df_plate["WellId"].unique(), key=lambda x: (x[0], int(x[1:])))
+        fig, ax = plt.subplots(
+            len(well_ids),
+            len(times),
+            figsize=(2 * len(times), 2 * len(well_ids)),
+            sharex=True,
+            sharey=True,
+        )
+        for w, well in enumerate(well_ids):
+            df_spatial = load_spatial_data(df_plate[(df_plate["WellId"] == well)], data_dir)
+            for t, time in enumerate(times):
+                print(plate_id, well, time)
+                sns.scatterplot(
+                    data=df_spatial[df_spatial["Time_hours"] == time],
+                    x="Location_Center_X",
+                    y="Location_Center_Y",
+                    hue="CellType",
+                    marker=".",
+                    s=5,
+                    legend=False,
+                    ax=ax[w][t],
+                    palette=cell_colors,
+                    edgecolor="none",
+                )
+                ax[w][t].set(title=f"Well {well} Time = {time}")
+        fig.patch.set_alpha(0.0)
+        fig.tight_layout()
+        plt.savefig(f"{save_loc}/plate{plate_id}_spatial.png", dpi=200)
+        plt.close()
+
+
 def plot_gamespace(save_loc, df, hue):
     palette = sns.color_palette("hls", len(df[hue].unique()))
     hue_order = sorted(df[hue].unique())
@@ -234,25 +276,17 @@ def individual_analysis(data_dir, exp_name):
     if not os.path.exists(save_loc):
         os.mkdir(save_loc)
 
-    # Get growth rate window
-    gr_window = get_growth_rate_window(data_dir, exp_name)
-
     # Count cells
-    counts_df = count_cells(data_dir, exp_name)
+    counts_df = calculate_counts(data_dir, exp_name)
     sensitive_type, resistant_type = get_cell_types(exp_name)
     cell_types = [sensitive_type, resistant_type]
     cell_colors = {sensitive_type: "#4C956C", resistant_type: "#EF7C8E"}
     plot_counts(save_loc, counts_df, cell_colors)
-    plot_counts(
-        save_loc,
-        counts_df[(counts_df["Time"] >= gr_window[0]) & (counts_df["Time"] <= gr_window[1])],
-        cell_colors,
-        "_gr",
-    )
     plot_drug_concentration(save_loc, counts_df, cell_types)
     plot_seeded_fraction(save_loc, counts_df, cell_types)
 
     # Calculate growth rate
+    gr_window = None  # get_growth_rate_window(data_dir, exp_name)
     growth_rate_df = calculate_growth_rates(data_dir, exp_name, counts_df, gr_window, cell_types)
     plot_freq_depend(save_loc, growth_rate_df, cell_types, cell_colors)
     plot_freq_depend(
@@ -275,10 +309,14 @@ def individual_analysis(data_dir, exp_name):
         counts_df,
         growth_rate_df,
         payoff_df,
-        gr_window,
         cell_types,
         cell_colors,
     )
+
+    # Plot spatial visualizations
+    locations_df = calculate_locations(data_dir, exp_name, counts_df)
+    times = sorted(counts_df["Time"].unique())[::2]
+    plot_spatial(save_loc, data_dir, locations_df, cell_colors, times)
 
 
 def replicate_analysis(data_dir):
@@ -292,7 +330,7 @@ def replicate_analysis(data_dir):
         gr_window = get_growth_rate_window(data_dir, exp_name)
         sensitive_type, resistant_type = get_cell_types(exp_name)
         cell_types = [sensitive_type, resistant_type]
-        counts_df_exp = count_cells(data_dir, exp_name)
+        counts_df_exp = calculate_counts(data_dir, exp_name)
         growth_rate_df_exp = calculate_growth_rates(
             data_dir, exp_name, counts_df_exp, gr_window, cell_types
         )

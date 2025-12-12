@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from game_assay.game_analysis import count_cells
+from game_assay.game_analysis import calculate_counts
 from utils import get_cell_types
 
 
@@ -46,7 +46,7 @@ def main():
     args = parser.parse_args()
 
     # Experimental count data
-    df = count_cells(args.data_dir, args.exp_name)
+    df = calculate_counts(args.data_dir, args.exp_name)
     df = df[(df["PlateId"] == args.plate_id) & (df["WellId"] == args.well_id)]
 
     # Extract counts
