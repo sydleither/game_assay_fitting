@@ -229,7 +229,6 @@ def plot_spatial(save_loc, data_dir, df, cell_colors, times):
         for w, well in enumerate(well_ids):
             df_spatial = load_spatial_data(df_plate[(df_plate["WellId"] == well)], data_dir)
             for t, time in enumerate(times):
-                print(plate_id, well, time)
                 sns.scatterplot(
                     data=df_spatial[df_spatial["Time_hours"] == time],
                     x="Location_Center_X",
@@ -250,7 +249,10 @@ def plot_spatial(save_loc, data_dir, df, cell_colors, times):
 
 
 def plot_gamespace(save_loc, df, hue):
-    palette = sns.color_palette("hls", len(df[hue].unique()))
+    if hue == "fit":
+        palette = sns.color_palette("mako", len(df[hue].unique()))
+    else:
+        palette = sns.color_palette("hls", len(df[hue].unique()))
     hue_order = sorted(df[hue].unique())
     fig, ax = plt.subplots(1, 1, figsize=(6, 6))
     sns.scatterplot(
@@ -276,18 +278,19 @@ def individual_analysis(data_dir, exp_name):
     if not os.path.exists(save_loc):
         os.mkdir(save_loc)
 
-    # Count cells
     counts_df = calculate_counts(data_dir, exp_name)
     sensitive_type, resistant_type = get_cell_types(exp_name)
     cell_types = [sensitive_type, resistant_type]
     cell_colors = {sensitive_type: "#4C956C", resistant_type: "#EF7C8E"}
+    gr_window = None  # get_growth_rate_window(data_dir, exp_name)
+    growth_rate_df = calculate_growth_rates(data_dir, exp_name, counts_df, gr_window, cell_types)
+    payoff_df = calculate_payoffs(
+        data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}"
+    )
+
     plot_counts(save_loc, counts_df, cell_colors)
     plot_drug_concentration(save_loc, counts_df, cell_types)
     plot_seeded_fraction(save_loc, counts_df, cell_types)
-
-    # Calculate growth rate
-    gr_window = None  # get_growth_rate_window(data_dir, exp_name)
-    growth_rate_df = calculate_growth_rates(data_dir, exp_name, counts_df, gr_window, cell_types)
     plot_freq_depend(save_loc, growth_rate_df, cell_types, cell_colors)
     plot_freq_depend(
         save_loc,
@@ -295,11 +298,6 @@ def individual_analysis(data_dir, exp_name):
         cell_types,
         cell_colors,
         "_dc0",
-    )
-
-    # Calculate payoff matrix parameters
-    payoff_df = calculate_payoffs(
-        data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}"
     )
 
     # Plot overview of drug-free results
@@ -327,15 +325,15 @@ def replicate_analysis(data_dir):
             continue
         if os.path.isfile(f"{data_dir}/{exp_name}") or exp_name == "layout_files":
             continue
-        gr_window = get_growth_rate_window(data_dir, exp_name)
+        gr_window = None #get_growth_rate_window(data_dir, exp_name)
         sensitive_type, resistant_type = get_cell_types(exp_name)
         cell_types = [sensitive_type, resistant_type]
-        counts_df_exp = calculate_counts(data_dir, exp_name)
+        counts_df_exp = calculate_counts(data_dir, exp_name, True)
         growth_rate_df_exp = calculate_growth_rates(
-            data_dir, exp_name, counts_df_exp, gr_window, cell_types
+            data_dir, exp_name, counts_df_exp, gr_window, cell_types, True
         )
         payoff_df_exp = calculate_payoffs(
-            data_dir, exp_name, growth_rate_df_exp, cell_types, f"Fraction_{sensitive_type}"
+            data_dir, exp_name, growth_rate_df_exp, cell_types, f"Fraction_{sensitive_type}", True
         )
         payoff_df_exp["Experiment"] = exp_name
         payoff_df = pd.concat([payoff_df, payoff_df_exp])
@@ -349,6 +347,7 @@ def replicate_analysis(data_dir):
     # Plot game spaces
     plot_gamespace(data_dir, payoff_df, "Experiment")
     plot_gamespace(data_dir, payoff_df, "Type2")
+    plot_gamespace(data_dir, payoff_df, "fit")
 
 
 def main():
