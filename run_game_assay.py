@@ -272,20 +272,26 @@ def plot_gamespace(save_loc, df, hue):
     plt.savefig(f"{save_loc}/gamespace_{hue}.png", bbox_inches="tight", dpi=200)
 
 
-def individual_analysis(data_dir, exp_name):
+def individual_analysis(data_dir, exp_name, dynamic_gr=True, rewrite=False):
     # Create images directory
     save_loc = f"{data_dir}/{exp_name}/images"
     if not os.path.exists(save_loc):
         os.mkdir(save_loc)
 
-    counts_df = calculate_counts(data_dir, exp_name)
+    if dynamic_gr:
+        gr_window = None
+    else:
+        gr_window = get_growth_rate_window(data_dir, exp_name)
+
+    counts_df = calculate_counts(data_dir, exp_name, rewrite)
     sensitive_type, resistant_type = get_cell_types(exp_name)
     cell_types = [sensitive_type, resistant_type]
     cell_colors = {sensitive_type: "#4C956C", resistant_type: "#EF7C8E"}
-    gr_window = None  # get_growth_rate_window(data_dir, exp_name)
-    growth_rate_df = calculate_growth_rates(data_dir, exp_name, counts_df, gr_window, cell_types)
+    growth_rate_df = calculate_growth_rates(
+        data_dir, exp_name, counts_df, gr_window, cell_types, rewrite
+    )
     payoff_df = calculate_payoffs(
-        data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}"
+        data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}", rewrite
     )
 
     plot_counts(save_loc, counts_df, cell_colors)
@@ -317,25 +323,34 @@ def individual_analysis(data_dir, exp_name):
     plot_spatial(save_loc, data_dir, locations_df, cell_colors, times)
 
 
-def replicate_analysis(data_dir):
+def replicate_analysis(data_dir, dynamic_gr=True, rewrite=True):
     # Get payoff information of each experiment
+    gr_window = None
     payoff_df = pd.DataFrame()
     for exp_name in os.listdir(data_dir):
         if "PIK3CA" in exp_name:  # TEMP
             continue
         if os.path.isfile(f"{data_dir}/{exp_name}") or exp_name == "layout_files":
             continue
-        gr_window = None #get_growth_rate_window(data_dir, exp_name)
+        if not dynamic_gr:
+            gr_window = get_growth_rate_window(data_dir, exp_name)
         sensitive_type, resistant_type = get_cell_types(exp_name)
         cell_types = [sensitive_type, resistant_type]
-        counts_df_exp = calculate_counts(data_dir, exp_name, True)
+        counts_df_exp = calculate_counts(data_dir, exp_name, rewrite)
         growth_rate_df_exp = calculate_growth_rates(
-            data_dir, exp_name, counts_df_exp, gr_window, cell_types, True
+            data_dir, exp_name, counts_df_exp, gr_window, cell_types, rewrite
         )
         payoff_df_exp = calculate_payoffs(
-            data_dir, exp_name, growth_rate_df_exp, cell_types, f"Fraction_{sensitive_type}", True
+            data_dir,
+            exp_name,
+            growth_rate_df_exp,
+            cell_types,
+            f"Fraction_{sensitive_type}",
+            rewrite,
         )
         payoff_df_exp["Experiment"] = exp_name
+        payoff_df_exp["Mean Growth Rate"] = np.exp(np.mean(growth_rate_df_exp["Intercept"]))
+        payoff_df_exp["Mean Fit"] = np.mean(growth_rate_df_exp["GrowthRate_fit"])
         payoff_df = pd.concat([payoff_df, payoff_df_exp])
     payoff_df = payoff_df[payoff_df["DrugConcentration"] == 0.0]
 

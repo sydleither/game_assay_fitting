@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from game_assay.game_analysis_utils import (
+    calculate_fit,
     compute_population_fraction,
     estimate_game_parameters,
     estimate_growth_rate,
@@ -29,13 +30,13 @@ def read_overview_xlsx(data_dir, exp_name):
     return experiment
 
 
-def calculate_counts(data_dir, dir_curr_experiment):
+def calculate_counts(data_dir, dir_curr_experiment, rewrite=False):
     cell_count_path = os.path.join(
         data_dir,
         dir_curr_experiment,
         "%s_counts_df_processed.csv" % dir_curr_experiment.split("/")[-1],
     )
-    if os.path.exists(cell_count_path):
+    if os.path.exists(cell_count_path) and not rewrite:
         return pd.read_csv(cell_count_path)
 
     experiment = read_overview_xlsx(data_dir, dir_curr_experiment)
@@ -108,13 +109,15 @@ def calculate_counts(data_dir, dir_curr_experiment):
     return counts_df
 
 
-def calculate_growth_rates(data_dir, exp_dir, counts_df, growth_rate_window, cell_type_list):
+def calculate_growth_rates(
+    data_dir, exp_dir, counts_df, growth_rate_window, cell_type_list, rewrite=False
+):
     gr_path = os.path.join(
         data_dir,
         exp_dir,
         "%s_growth_rate_df_processed.csv" % exp_dir.split("/")[-1],
     )
-    if os.path.exists(gr_path):
+    if os.path.exists(gr_path) and not rewrite:
         return pd.read_csv(gr_path)
 
     img_freq = read_overview_xlsx(data_dir, exp_dir)["Imaging Frequency"]
@@ -136,26 +139,22 @@ def calculate_growth_rates(data_dir, exp_dir, counts_df, growth_rate_window, cel
         ]
         # Quality control data
         if curr_df["Count"].min() <= 0:  # Check for negative values
-            print(
-                "Zero or negative values detected in the count data. Skipping analysis of %s data for well %s."
-                % (cell_type, well_id)
-            )
             slope, intercept, low_slope, high_slope = np.nan, np.nan, np.nan, np.nan
             curr_window = None
+            fit = None
         elif curr_df["Count"].mean() < count_threshold:  # Check for low counts
-            print(
-                "Low counts detected in the count data. Skipping analysis of %s data for well %s."
-                % (cell_type, well_id)
-            )
             slope, intercept, low_slope, high_slope = np.nan, np.nan, np.nan, np.nan
             curr_window = None
+            fit = None
         else:
             # Calculate growth rate window, if not yet set
             if growth_rate_window is None:
                 x = curr_df["Time"].values
                 y = np.log(curr_df["Count"].values)
-                curr_window = opt_linear_range(x, y, 0)
+                curr_window = opt_linear_range(x, y)
                 curr_window = [img_freq * w for w in curr_window]
+            else:
+                curr_window = growth_rate_window
             # Estimate growth rate
             slope, intercept, low_slope, high_slope = estimate_growth_rate(
                 data_df=counts_df[counts_df["PlateId"] == plate_id],
@@ -163,6 +162,8 @@ def calculate_growth_rates(data_dir, exp_dir, counts_df, growth_rate_window, cel
                 cell_type=cell_type,
                 growth_rate_window=curr_window,
             )
+            y_pred = intercept + slope * curr_df["Time"].values
+            fit = calculate_fit(np.log(curr_df["Count"].values), y_pred)
         # Compute population fraction
         fractions_dict = compute_population_fraction(
             counts_df[counts_df["PlateId"] == plate_id],
@@ -183,11 +184,9 @@ def calculate_growth_rates(data_dir, exp_dir, counts_df, growth_rate_window, cel
                 "GrowthRate_lowerBound": low_slope,
                 "GrowthRate_higherBound": high_slope,
                 "Intercept": intercept,
-                "GrowthRate_normalised": slope,
-                "GrowthRate_lowerBound_normalised": low_slope,
-                "GrowthRate_higherBound_normalised": high_slope,
                 "GrowthRate_window_start": curr_window[0] if curr_window is not None else np.nan,
                 "GrowthRate_window_end": curr_window[1] if curr_window is not None else np.nan,
+                "GrowthRate_fit": fit
             }
         )
     growth_rate_df = pd.DataFrame(tmp_list)
@@ -195,13 +194,15 @@ def calculate_growth_rates(data_dir, exp_dir, counts_df, growth_rate_window, cel
     return growth_rate_df
 
 
-def calculate_payoffs(data_dir, exp_dir, growth_rate_df, cell_type_list, fraction_col):
+def calculate_payoffs(
+    data_dir, exp_dir, growth_rate_df, cell_type_list, fraction_col, rewrite=False
+):
     game_path = os.path.join(
         data_dir,
         exp_dir,
         "%s_game_params_df_processed.csv" % exp_dir.split("/")[-1],
     )
-    if os.path.exists(game_path):
+    if os.path.exists(game_path) and not rewrite:
         return pd.read_csv(game_path)
 
     tmp_list = []
@@ -213,7 +214,6 @@ def calculate_payoffs(data_dir, exp_dir, growth_rate_df, cell_type_list, fractio
             growth_rate_col="GrowthRate",
             cell_type_col="CellType",
             cell_type_list=cell_type_list,
-            method="theil",
             ci=0.95,
         )
         tmp_list.append(
@@ -229,13 +229,13 @@ def calculate_payoffs(data_dir, exp_dir, growth_rate_df, cell_type_list, fractio
     return game_params_df
 
 
-def calculate_locations(data_dir, exp_dir, counts_df, drug_concentration=0):
+def calculate_locations(data_dir, exp_dir, counts_df, drug_concentration=0, rewrite=False):
     loc_path = os.path.join(
         data_dir,
         exp_dir,
         "%s_locations_df_processed.csv" % exp_dir.split("/")[-1],
     )
-    if os.path.exists(loc_path):
+    if os.path.exists(loc_path) and not rewrite:
         return pd.read_csv(loc_path)
 
     # Add experiment info to dataframe

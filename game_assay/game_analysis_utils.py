@@ -364,7 +364,6 @@ def estimate_growth_rate(data_df, well_id=None, cell_type=None, growth_rate_wind
     x = curr_df["Time"].values - curr_df["Time"].values[0]  # Start the time at 0
     y = np.log(curr_df["Count"].values)  # Log-transform
     slope, intercept, low_slope, high_slope = stats.theilslopes(y, x)
-
     return slope, intercept, low_slope, high_slope
 
 
@@ -412,6 +411,10 @@ def compute_population_fraction(
     return curr_df[fraction_list].mean().to_dict()
 
 
+def calculate_fit(Y, Y_pred):
+    return np.sqrt(np.mean((Y - Y_pred) ** 2)) / np.mean(Y)
+
+
 # ---------------------------------------------------------------------------------------------------------------
 def estimate_game_parameters(
     growth_rate_df,
@@ -419,7 +422,6 @@ def estimate_game_parameters(
     growth_rate_col="GrowthRate",
     cell_type_col="CellType",
     cell_type_list=None,
-    method="theil",
     ci=0.95,
 ):
     """
@@ -442,11 +444,6 @@ def estimate_game_parameters(
     -------
     params_dict : a dictionary with the pay-off matrix entries and the advantage of each cell type (game space position).
     """
-    # Check input
-    supported_methods_list = ["ols", "theil"]
-    if method not in supported_methods_list:
-        raise ValueError("Method must be one of %s" % supported_methods_list)
-
     # Estimate the game parameters
     coeffs_dict = {}
     for cell_type in growth_rate_df[cell_type_col].unique():
@@ -454,21 +451,19 @@ def estimate_game_parameters(
             (growth_rate_df[cell_type_col] == cell_type)
             & (growth_rate_df["GrowthRate"].isna() == False)
         ]
-        if method == "ols":
-            ols_result = stats.linregress(x=tmp_df[cell_type_col], y=tmp_df[fraction_col])
-            best_fit_func = lambda x: (ols_result.slope * x) + ols_result.intercept
-            coeffs_dict[cell_type] = [best_fit_func(0), best_fit_func(1)]
-        if method == "theil":
-            theil_result = stats.theilslopes(
-                x=tmp_df[fraction_col], y=tmp_df[growth_rate_col], alpha=ci
-            )
-            best_fit_func = lambda x: (theil_result[0] * x) + theil_result[1]
-            coeffs_dict[cell_type] = [
-                best_fit_func(0),
-                best_fit_func(1),
-                theil_result.intercept,
-                theil_result.slope,
-            ]
+        theil_result = stats.theilslopes(
+            x=tmp_df[fraction_col], y=tmp_df[growth_rate_col], alpha=ci
+        )
+        best_fit_func = lambda x: (theil_result.slope * x) + theil_result.intercept
+        Y_pred = theil_result.slope * tmp_df[fraction_col] + theil_result.intercept
+        fit = calculate_fit(tmp_df[growth_rate_col], Y_pred)
+        coeffs_dict[cell_type] = [
+            best_fit_func(0),
+            best_fit_func(1),
+            theil_result.intercept,
+            theil_result.slope,
+            fit,
+        ]
     # Transform into pay-off matrix entries. To do so, we need to find out the direction of the x-axis (i.e. whether
     # it's increasing for Type 1 or Type 2 as we go left to right).
     # The growth rate of the "index" population should be nan when their fraction is 0.
@@ -498,6 +493,9 @@ def estimate_game_parameters(
             params_dict["p%d%d" % (pop_id, pop_id % 2 + 1)] = coeffs_dict[cell_type][1]
             params_dict["r%d" % pop_id] = coeffs_dict[cell_type][2]
             params_dict["c%d%d" % (pop_id % 2 + 1, pop_id)] = coeffs_dict[cell_type][3]
+        # Add quality of fit
+        params_dict["fit%d" % pop_id] = coeffs_dict[cell_type][4]
+    params_dict["fit"] = (params_dict["fit1"] + params_dict["fit2"]) / 2
     # Compute the game space position
     params_dict["Advantage_0"] = params_dict["p12"] - params_dict["p22"]
     params_dict["Advantage_1"] = params_dict["p21"] - params_dict["p11"]
@@ -505,6 +503,7 @@ def estimate_game_parameters(
     return params_dict
 
 
+# ---------------------------------------------------------------------------------------------------------------
 def linear_range_obj_fn(X, Y, l, slope_ub=np.inf, slope_lb=-np.inf):
     """Objective function for finding the optimal linear range
     Args:
@@ -512,18 +511,16 @@ def linear_range_obj_fn(X, Y, l, slope_ub=np.inf, slope_lb=-np.inf):
         Y (array-like): dependent variable
         l (float): regularization parameter
     """
-    # estimate linear regression
-    slope, _, _, _ = stats.theilslopes(Y, X)
+    slope, intercept, _, _ = stats.theilslopes(Y, X)
     if slope > slope_ub:
         return np.inf
     if slope < slope_lb:
         return np.inf
-    n = len(X)
-    rvalue, _ = stats.pearsonr(X, Y)
-    return (1 - rvalue**2) + l / n
+    Y_pred = slope * X + intercept
+    return calculate_fit(Y, Y_pred)
 
 
-def opt_linear_range(X, Y, l, slope_ub=np.inf, slope_lb=-np.inf):
+def opt_linear_range(X, Y, l=0, slope_ub=np.inf, slope_lb=-np.inf, min_pts=10):
     """Finds the optimal linear range for a given dataset
     Args:
         X (array-like): independent variable
@@ -535,18 +532,17 @@ def opt_linear_range(X, Y, l, slope_ub=np.inf, slope_lb=-np.inf):
     if type(Y) is list:
         Y = np.array(Y)
     # for each subset of X, compute the objective function
-    n = len(X)
+    n = min(len(X), 25)
     loss_list = []
     subset_list = []
-    # print('\n')
-    # print('n = ' + str(n))
-    for subset_length in range(5, n):
+    for subset_length in range(min_pts, n):
         for start in range(n - subset_length):
             end = start + subset_length
             X_subset = X[start:end]
             Y_subset = Y[start:end]
-            # print(end)
-            loss = linear_range_obj_fn(X_subset, Y_subset, l, slope_ub=slope_ub, slope_lb=slope_lb)
+            loss = linear_range_obj_fn(
+                X_subset - X_subset[0], Y_subset, l, slope_ub=slope_ub, slope_lb=slope_lb
+            )
             loss_list.append(loss)
             subset_list.append((start, end))
     # find the subset with the minimum loss
