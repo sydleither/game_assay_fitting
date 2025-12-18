@@ -110,7 +110,12 @@ def calculate_counts(data_dir, dir_curr_experiment, rewrite=False):
 
 
 def calculate_growth_rates(
-    data_dir, exp_dir, counts_df, growth_rate_window, cell_type_list, rewrite=False
+    data_dir,
+    exp_dir,
+    counts_df,
+    growth_rate_window=None,
+    cell_type_list=None,
+    rewrite=False,
 ):
     gr_path = os.path.join(
         data_dir,
@@ -119,6 +124,9 @@ def calculate_growth_rates(
     )
     if os.path.exists(gr_path) and not rewrite:
         return pd.read_csv(gr_path)
+
+    if cell_type_list is None:
+        raise ValueError("Set the cell type list.")
 
     img_freq = read_overview_xlsx(data_dir, exp_dir)["Imaging Frequency"]
     metadata_columns = [
@@ -186,7 +194,7 @@ def calculate_growth_rates(
                 "Intercept": intercept,
                 "GrowthRate_window_start": curr_window[0] if curr_window is not None else np.nan,
                 "GrowthRate_window_end": curr_window[1] if curr_window is not None else np.nan,
-                "GrowthRate_fit": fit
+                "GrowthRate_fit": fit,
             }
         )
     growth_rate_df = pd.DataFrame(tmp_list)

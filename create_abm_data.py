@@ -52,7 +52,7 @@ def main():
         )
 
     # Mimic plate structure
-    seeding = [0, lgr, 0.1, 0.3, 0.5, 0.7, 0.9, 0.95, 1]
+    seeding = [0, 0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 0.95, 1]
     colids = [2, 3, 4, 5, 6, 7, 8, 9, 10]
     rowids = string.ascii_uppercase[1:7]
 
