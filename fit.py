@@ -41,7 +41,7 @@ def plot_fits(save_loc, exp_name, df, df_model, cell_colors, dc):
     well_rows = sorted(df["RowId"].unique())
     well_cols = sorted(df["ColumnId"].unique())
     grid_rows = plate_rows * len(well_rows)
-    grid_cols = plate_cols * len(well_cols) + 1
+    grid_cols = plate_cols * len(well_cols)
 
     # Initalize figure
     fig, ax = plt.subplots(
@@ -72,6 +72,7 @@ def plot_fits(save_loc, exp_name, df, df_model, cell_colors, dc):
                     ax=ax_curr,
                     palette=cell_colors,
                 )
+                ax_curr.set(title=f"Plate {plate} Well {row}{col}", ylim=(0, y_max))
                 # Plot fitted line
                 df1_model = df_model[
                     (df_model["PlateId"] == str(plate)) & (df_model["WellId"] == f"{row}{col}")
@@ -89,7 +90,6 @@ def plot_fits(save_loc, exp_name, df, df_model, cell_colors, dc):
                     palette=["black", "black"],
                     alpha=0.5,
                 )
-                ax_curr.set(title=f"Plate {plate} Well {row}{col}", ylim=(0, y_max))
 
     # Format figure and save
     fig.suptitle(f"{exp_name} {dc} Drug Concentration")
@@ -97,21 +97,10 @@ def plot_fits(save_loc, exp_name, df, df_model, cell_colors, dc):
     plt.close()
 
 
-def main():
-    # Input args
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
-    parser.add_argument(
-        "-exp", "--exp_name", type=str, default="231010_S-E9_GFP_vs_BRAF_mcherry_Carboplatin"
-    )
-    models = ["replicator", "lv"]
-    parser.add_argument("-model", "--model", type=str, default="replicator", choices=models)
-    parser.add_argument("-dc", "--drug_concentration", type=float, default=0.0)
-    args = parser.parse_args()
-
+def fit(data_dir, exp_name, model, drug_concentration):
     # Get data
-    counts_df = calculate_counts(args.data_dir, args.exp_name)
-    growth_rate_df = calculate_growth_rates(args.data_dir, args.exp_name, counts_df)
+    counts_df = calculate_counts(data_dir, exp_name)
+    growth_rate_df = calculate_growth_rates(data_dir, exp_name, counts_df)
 
     # Combine count and growth rate dataframes
     float_cols = counts_df.select_dtypes(include=["float64"]).columns
@@ -125,11 +114,11 @@ def main():
 
     # Subset to desired samples
     df = df[~df["GrowthRate"].isna()]
-    df = df[df["DrugConcentration"] == args.drug_concentration]
+    df = df[df["DrugConcentration"] == drug_concentration]
 
     # Trim to exponential growth rate window
     df_pivot = df.copy()
-    if args.model == "replicator":
+    if model == "replicator":
         df_pivot = df_pivot[
             (df_pivot["Time"] >= df_pivot["GrowthRate_window_start"])
             & (df_pivot["Time"] <= df_pivot["GrowthRate_window_end"])
@@ -154,11 +143,11 @@ def main():
     df_pivot = df_pivot.dropna(axis=0)
 
     # Map cell types
-    sensitive, resistant = get_cell_types(args.exp_name)
+    sensitive, resistant = get_cell_types(exp_name)
     cell_type_map = {"S": sensitive, "R": resistant}
 
     # Define and fit ODE model
-    ode_model = create_model(args.model)
+    ode_model = create_model(model)
     params = ode_model.get_params()
     minimize(
         residual_multipleConditions,
@@ -174,6 +163,7 @@ def main():
         df_rep = df_pivot[(df_pivot["UniqueId"] == rep)]
         ode_model.paramDic["S0"] = df_rep[df_rep["Time"] == 0][sensitive].iloc[0]
         ode_model.paramDic["R0"] = df_rep[df_rep["Time"] == 0][resistant].iloc[0]
+        ode_model.SetParams(**ode_model.paramDic)
         # Run model
         ode_model.Simulate(treatmentScheduleList=ExtractTreatmentFromDf(df_rep), **solver_kws)
         model_df = ode_model.resultsDf.reset_index()
@@ -216,18 +206,64 @@ def main():
 
     # Save estimated counts
     models_df = pd.concat(model_dfs)
-    models_df.to_csv(
-        f"{args.data_dir}/{args.exp_name}/{args.exp_name}_{args.model}.csv", index=False
-    )
+    models_df.to_csv(f"{data_dir}/{exp_name}/{exp_name}_{model}.csv", index=False)
 
     # Plot overview of estimated fits and parameters
     cell_types = [sensitive, resistant]
     cell_colors = {sensitive: "#4C956C", resistant: "#EF7C8E"}
-    save_loc = f"{args.data_dir}/{args.exp_name}/images/{args.model}"
+    save_loc = f"{data_dir}/{exp_name}/images/{model}"
     if not os.path.exists(save_loc):
         os.mkdir(save_loc)
 
-    plot_fits(save_loc, args.exp_name, df, models_df, cell_colors, dc=args.drug_concentration)
+    plot_fits(save_loc, exp_name, df, models_df, cell_colors, dc=drug_concentration)
+
+    return models_df
+
+
+def compare_fits(save_loc, df):
+    #palette = sns.color_palette("hls", len(df[hue].unique()))
+    #hue_order = sorted(df[hue].unique())
+    # fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+    # sns.boxplot(
+    #     data=df,
+    #     x="Fit",
+    #     y="Advantage_0",
+    #     s=200,
+    #     hue=hue,
+    #     palette=palette,
+    #     hue_order=hue_order,
+    #     ax=ax,
+    # )
+    # ax.axvline(0, color="black")
+    # ax.axhline(0, color="black")
+    # ax.legend(bbox_to_anchor=(1.01, 1))
+    # fig.patch.set_alpha(0.0)
+    # plt.savefig(f"{save_loc}/gamespace_{hue}.png", bbox_inches="tight", dpi=200)
+    pass
+
+
+def main():
+    # Input args
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
+    parser.add_argument("-exp", "--exp_name", type=str, default=None)
+    models = ["replicator", "lv"]
+    parser.add_argument("-model", "--model", type=str, default="replicator", choices=models)
+    args = parser.parse_args()
+
+    # Fit model and save results
+    exp_names = [args.exp_name] if args.exp_name else os.listdir(args.data_dir)
+    all_models = []
+    for exp_name in exp_names:
+        if os.path.isfile(f"{args.data_dir}/{exp_name}") or exp_name == "layout_files":
+            continue
+        model_df = fit(args.data_dir, exp_name, args.model, 0)
+        model_df["Experiment"] = exp_name
+        all_models.append(model_df)
+    df = pd.concat(all_models)
+
+    # Plot aggregate results
+    compare_fits(args.dara_dir, df)
 
 
 if __name__ == "__main__":
