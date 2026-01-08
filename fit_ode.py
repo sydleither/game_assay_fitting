@@ -33,7 +33,7 @@ optimiser_kws = {
 }
 
 
-def plot_fits(save_loc, exp_name, df, df_model, cell_colors, dc):
+def plot_fits(save_loc, exp_name, model_name, df, df_model, cell_colors, dc):
     # Set figure dimensions
     plates = sorted(df["PlateId"].unique())
     plate_rows = 1
@@ -75,7 +75,7 @@ def plot_fits(save_loc, exp_name, df, df_model, cell_colors, dc):
                 ax_curr.set(title=f"Plate {plate} Well {row}{col}", ylim=(0, y_max))
                 # Plot fitted line
                 df1_model = df_model[
-                    (df_model["PlateId"] == str(plate)) & (df_model["WellId"] == f"{row}{col}")
+                    (df_model["PlateId"] == plate) & (df_model["WellId"] == f"{row}{col}")
                 ]
                 if len(df1_model) == 0:
                     continue
@@ -93,7 +93,39 @@ def plot_fits(save_loc, exp_name, df, df_model, cell_colors, dc):
 
     # Format figure and save
     fig.suptitle(f"{exp_name} {dc} Drug Concentration")
-    plt.savefig(f"{save_loc}/fits_{exp_name}_{dc}dc.png", bbox_inches="tight", dpi=200)
+    fig.patch.set_alpha(0.0)
+    plt.savefig(f"{save_loc}/{model_name}_{exp_name}_{dc}dc.png", bbox_inches="tight", dpi=200)
+    plt.close()
+
+
+def plot_freqdepend_fit(save_loc, exp_name, model_name, models_df, cell_colors, cell_types, dc):
+    df = models_df.copy().drop(["Time", "Count"], axis=1).drop_duplicates().reset_index()
+    fig, ax = plt.subplots(figsize=(4, 4))
+    sns.scatterplot(
+        data=df,
+        x=f"Fraction_{cell_types[0]}",
+        y="GrowthRate",
+        hue="CellType",
+        marker="o",
+        s=50,
+        legend=False,
+        ax=ax,
+        palette=cell_colors,
+    )
+    for i, cell_type in enumerate(cell_types):
+        x0 = "p_SR" if i == 0 else "p_SS"
+        x1 = "p_RR" if i == 0 else "p_RS"
+        ax.plot(
+            [0, 1],
+            [df[x0].values[0], df[x1].values[0]],
+            ls="--",
+            color=cell_colors[cell_type],
+        )
+    ax.set_title(f"{exp_name}\n{dc} Drug Concentration")
+    fig.patch.set_alpha(0.0)
+    plt.savefig(
+        f"{save_loc}/{model_name}_freqdepend_{exp_name}_{dc}dc.png", bbox_inches="tight", dpi=200
+    )
     plt.close()
 
 
@@ -118,12 +150,14 @@ def fit(data_dir, exp_name, model, drug_concentration):
 
     # Trim to exponential growth rate window
     df_pivot = df.copy()
+    trimmed = False
     if model == "replicator":
         df_pivot = df_pivot[
             (df_pivot["Time"] >= df_pivot["GrowthRate_window_start"])
             & (df_pivot["Time"] <= df_pivot["GrowthRate_window_end"])
         ]
         df_pivot["Time"] = df_pivot["Time"] - df_pivot["GrowthRate_window_start"]
+        trimmed = True
 
     # Transform dataframe from long format to wide
     df_pivot = df_pivot.pivot(
@@ -145,6 +179,17 @@ def fit(data_dir, exp_name, model, drug_concentration):
     # Map cell types
     sensitive, resistant = get_cell_types(exp_name)
     cell_type_map = {"S": sensitive, "R": resistant}
+
+    # Define growth rate columns to keep in fit dataframe
+    gr_cols = [
+        f"Fraction_{sensitive}",
+        "GrowthRate",
+        "GrowthRate_lowerBound",
+        "GrowthRate_higherBound",
+        "Intercept",
+        "GrowthRate_window_start",
+        "GrowthRate_window_end",
+    ]
 
     # Define and fit ODE model
     ode_model = create_model(model)
@@ -180,16 +225,18 @@ def fit(data_dir, exp_name, model, drug_concentration):
         model_df = pd.concat(out)
         # Format results
         model_df = model_df.merge(
-            df[(df["UniqueId"] == rep)][["Time", "CellType", "GrowthRate_window_start"]],
+            df[(df["UniqueId"] == rep)][["Time", "CellType"] + gr_cols],
             on=["Time", "CellType"],
         )
-        model_df["Time"] = model_df["Time"] + model_df["GrowthRate_window_start"]
-        model_df["PlateId"] = rep[0]
+        if trimmed:
+            model_df["Time"] = model_df["Time"] + model_df["GrowthRate_window_start"]
+        model_df["PlateId"] = int(rep[0])
         model_df["WellId"] = rep[1:]
+        model_df["DrugConcentration"] = float(drug_concentration)
         # Add parameters
         for p, v in ode_model.paramDic.items():
             model_df[p] = v
-        # Get fit information
+        # Get growth rate fit information
         fit_sensitive = calculate_fit(
             df_rep[sensitive].values,
             model_df[model_df["CellType"] == sensitive]["Count"].values,
@@ -203,43 +250,46 @@ def fit(data_dir, exp_name, model, drug_concentration):
         model_df.loc[model_df["CellType"] == resistant, "Fit"] = fit_resistant
         # Concat to experiment model df
         model_dfs.append(model_df)
+    models_df = pd.concat(model_dfs)
+
+    # Get frequency dependence fits
+    if model == "replicator":
+        models_df["Sensitive Estimated"] = (
+            (models_df["p_SS"] - models_df["p_SR"]) * models_df[f"Fraction_{sensitive}"]
+        ) + models_df["p_SR"]
+        models_df["Resistant Estimated"] = (
+            (models_df["p_RS"] - models_df["p_RR"]) * models_df[f"Fraction_{sensitive}"]
+        ) + models_df["p_RR"]
+        sensitive_fit = calculate_fit(
+            models_df[models_df["CellType"] == sensitive]["GrowthRate"],
+            models_df[models_df["CellType"] == sensitive]["Sensitive Estimated"],
+        )
+        resistant_fit = calculate_fit(
+            models_df[models_df["CellType"] == resistant]["GrowthRate"],
+            models_df[models_df["CellType"] == resistant]["Resistant Estimated"],
+        )
+        models_df.loc[models_df["CellType"] == resistant, "Frequency Dependent Fit"] = resistant_fit
+        models_df.loc[models_df["CellType"] == sensitive, "Frequency Dependent Fit"] = sensitive_fit
+        models_df = models_df.drop(["Sensitive Estimated", "Resistant Estimated"], axis=1)
 
     # Save estimated counts
-    models_df = pd.concat(model_dfs)
-    models_df.to_csv(f"{data_dir}/{exp_name}/{exp_name}_{model}.csv", index=False)
+    models_df.to_csv(f"{data_dir}/{exp_name}/{exp_name}_{model}_fit.csv", index=False)
 
     # Plot overview of estimated fits and parameters
-    cell_types = [sensitive, resistant]
     cell_colors = {sensitive: "#4C956C", resistant: "#EF7C8E"}
-    save_loc = f"{data_dir}/{exp_name}/images/{model}"
+    save_loc = f"{data_dir}/{exp_name}/images"
     if not os.path.exists(save_loc):
         os.mkdir(save_loc)
-
-    plot_fits(save_loc, exp_name, df, models_df, cell_colors, dc=drug_concentration)
-
-    return models_df
-
-
-def compare_fits(save_loc, df):
-    #palette = sns.color_palette("hls", len(df[hue].unique()))
-    #hue_order = sorted(df[hue].unique())
-    # fig, ax = plt.subplots(1, 1, figsize=(6, 6))
-    # sns.boxplot(
-    #     data=df,
-    #     x="Fit",
-    #     y="Advantage_0",
-    #     s=200,
-    #     hue=hue,
-    #     palette=palette,
-    #     hue_order=hue_order,
-    #     ax=ax,
-    # )
-    # ax.axvline(0, color="black")
-    # ax.axhline(0, color="black")
-    # ax.legend(bbox_to_anchor=(1.01, 1))
-    # fig.patch.set_alpha(0.0)
-    # plt.savefig(f"{save_loc}/gamespace_{hue}.png", bbox_inches="tight", dpi=200)
-    pass
+    plot_fits(save_loc, exp_name, model, df, models_df, cell_colors, dc=drug_concentration)
+    plot_freqdepend_fit(
+        save_loc,
+        exp_name,
+        model,
+        models_df,
+        cell_colors,
+        [sensitive, resistant],
+        dc=drug_concentration,
+    )
 
 
 def main():
@@ -253,17 +303,11 @@ def main():
 
     # Fit model and save results
     exp_names = [args.exp_name] if args.exp_name else os.listdir(args.data_dir)
-    all_models = []
     for exp_name in exp_names:
         if os.path.isfile(f"{args.data_dir}/{exp_name}") or exp_name == "layout_files":
             continue
-        model_df = fit(args.data_dir, exp_name, args.model, 0)
-        model_df["Experiment"] = exp_name
-        all_models.append(model_df)
-    df = pd.concat(all_models)
-
-    # Plot aggregate results
-    compare_fits(args.dara_dir, df)
+        print(exp_name)
+        fit(args.data_dir, exp_name, args.model, 0)
 
 
 if __name__ == "__main__":
