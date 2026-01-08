@@ -6,7 +6,6 @@ import pandas as pd
 
 from game_assay.game_analysis_utils import (
     calculate_fit,
-    compute_population_fraction,
     estimate_game_parameters,
     estimate_growth_rate,
     load_cellprofiler_data,
@@ -172,21 +171,18 @@ def calculate_growth_rates(
             )
             y_pred = intercept + slope * curr_df["Time"].values
             fit = calculate_fit(np.log(curr_df["Count"].values), y_pred)
-        # Compute population fraction
-        fractions_dict = compute_population_fraction(
-            counts_df[counts_df["PlateId"] == plate_id],
-            well_id=well_id,
-            fraction_window=curr_window,
-            n_images="all",
-            cell_type_list=cell_type_list,
-        )
+        # Add initial frequency of cell types
+        initial_freq = counts_df[(counts_df["Time"] == 0) & (counts_df["PlateId"] == plate_id) & (counts_df["WellId"] == well_id)]
+        fractions = {}
+        for ct, freq in initial_freq[["CellType", "Frequency"]].values:
+            fractions[f"Fraction_{ct}"] = freq
         # Compile growth_rate_df row
         tmp_list.append(
             {
                 "PlateId": plate_id,
                 "WellId": well_id,
                 "CellType": cell_type,
-                **fractions_dict,
+                **fractions,
                 **curr_df[metadata_columns].iloc[0].to_dict(),
                 "GrowthRate": slope,
                 "GrowthRate_lowerBound": low_slope,

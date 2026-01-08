@@ -367,50 +367,6 @@ def estimate_growth_rate(data_df, well_id=None, cell_type=None, growth_rate_wind
     return slope, intercept, low_slope, high_slope
 
 
-# ---------------------------------------------------------------------------------------------------------------
-def compute_population_fraction(
-    counts_df, fraction_window=None, n_images="all", well_id=None, cell_type_list=None
-):
-    """
-    Compute the fraction of a (or each) cell population in a well.
-    counts_df: pandas dataframe containing the cell count data
-    fraction_window: time window for computing the fraction
-    n_images: number of images to include in the computation; if "all", include all images
-    well_id: well identifier; if not None, assume data is from a single well
-    cell_type_list: list of cell types to include in the computation; if None, include all cell types
-    Returns: dictionary containing the fraction of each cell type
-    """
-
-    # Format the data
-    cell_type_list = (
-        cell_type_list if cell_type_list is not None else counts_df["CellType"].unique()
-    )
-    curr_df = counts_df.copy()  # Make a copy to avoid modifying the original dataframe
-    if well_id is not None:  # Filter by well_id if requested
-        curr_df = curr_df[(curr_df["WellId"] == well_id)]
-
-    # Turn to wide format for easier manipulation
-    curr_df = counts_df[(counts_df["WellId"] == well_id)].copy()
-    curr_df = curr_df.pivot(index="Time", columns="CellType", values="Count")
-    curr_df = curr_df.reset_index()
-    curr_df["TotalCount"] = curr_df[cell_type_list].sum(axis=1)
-    fraction_list = []
-    for cell_type in cell_type_list:
-        curr_df["Fraction_%s" % cell_type] = curr_df[cell_type] / curr_df["TotalCount"]
-        fraction_list.append("Fraction_%s" % cell_type)
-
-    # Return the fraction using the requested method
-    if fraction_window is None:
-        fraction_window = [curr_df["Time"].min(), curr_df["Time"].max()]
-    curr_df = curr_df[curr_df["Time"].between(fraction_window[0], fraction_window[1])]
-    if n_images != "all":
-        if n_images >= 0:
-            curr_df = curr_df.iloc[:n_images]
-        else:
-            curr_df = curr_df.iloc[n_images:]
-    return curr_df[fraction_list].mean().to_dict()
-
-
 def calculate_fit(Y, Y_pred):
     return np.sqrt(np.mean((Y - Y_pred) ** 2)) / np.mean(Y)
 
