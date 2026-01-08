@@ -5,12 +5,11 @@ import numpy as np
 import pandas as pd
 
 from game_assay.game_analysis_utils import (
-    calculate_fit,
     estimate_game_parameters,
     estimate_growth_rate,
     load_cellprofiler_data,
     map_well_to_experimental_condition,
-    opt_linear_range,
+    optimize_growth_rate_window,
 )
 
 
@@ -127,7 +126,6 @@ def calculate_growth_rates(
     if cell_type_list is None:
         raise ValueError("Set the cell type list.")
 
-    img_freq = read_overview_xlsx(data_dir, exp_dir)["Imaging Frequency"]
     metadata_columns = [
         col
         for col in counts_df.columns
@@ -135,7 +133,16 @@ def calculate_growth_rates(
     ]
     count_threshold = counts_df["Minimum Cell Number"].iloc[0]
     tmp_list = []
-    curr_window = growth_rate_window
+
+    # Calculate growth rate window
+    if growth_rate_window is None:
+        counts_df = counts_df.groupby(["PlateId", "WellId"], group_keys=False)[
+            counts_df.columns
+        ].apply(optimize_growth_rate_window)
+    else:
+        counts_df["GrowthRate_window_start"] = growth_rate_window[0]
+        counts_df["GrowthRate_window_end"] = growth_rate_window[1]
+
     for plate_id, well_id, cell_type in product(
         counts_df["PlateId"].unique(), counts_df["WellId"].unique(), cell_type_list
     ):
@@ -144,35 +151,31 @@ def calculate_growth_rates(
             & (counts_df["WellId"] == well_id)
             & (counts_df["CellType"] == cell_type)
         ]
+        growth_rate_window = (
+            curr_df["GrowthRate_window_start"].values[0],
+            curr_df["GrowthRate_window_end"].values[0],
+        )
         # Quality control data
-        if curr_df["Count"].min() <= 0:  # Check for negative values
+        if (
+            curr_df["Count"].min() <= 0
+            or curr_df["Count"].mean() < count_threshold
+            or np.isnan(growth_rate_window[0])
+        ):
             slope, intercept, low_slope, high_slope = np.nan, np.nan, np.nan, np.nan
-            curr_window = None
-            fit = None
-        elif curr_df["Count"].mean() < count_threshold:  # Check for low counts
-            slope, intercept, low_slope, high_slope = np.nan, np.nan, np.nan, np.nan
-            curr_window = None
-            fit = None
+        # Estimate growth rate
         else:
-            # Calculate growth rate window, if not yet set
-            if growth_rate_window is None:
-                x = curr_df["Time"].values
-                y = np.log(curr_df["Count"].values)
-                curr_window = opt_linear_range(x, y)
-                curr_window = [img_freq * w for w in curr_window]
-            else:
-                curr_window = growth_rate_window
-            # Estimate growth rate
             slope, intercept, low_slope, high_slope = estimate_growth_rate(
                 data_df=counts_df[counts_df["PlateId"] == plate_id],
                 well_id=well_id,
                 cell_type=cell_type,
-                growth_rate_window=curr_window,
+                growth_rate_window=growth_rate_window,
             )
-            y_pred = intercept + slope * curr_df["Time"].values
-            fit = calculate_fit(np.log(curr_df["Count"].values), y_pred)
         # Add initial frequency of cell types
-        initial_freq = counts_df[(counts_df["Time"] == 0) & (counts_df["PlateId"] == plate_id) & (counts_df["WellId"] == well_id)]
+        initial_freq = counts_df[
+            (counts_df["Time"] == 0)
+            & (counts_df["PlateId"] == plate_id)
+            & (counts_df["WellId"] == well_id)
+        ]
         fractions = {}
         for ct, freq in initial_freq[["CellType", "Frequency"]].values:
             fractions[f"Fraction_{ct}"] = freq
@@ -188,9 +191,9 @@ def calculate_growth_rates(
                 "GrowthRate_lowerBound": low_slope,
                 "GrowthRate_higherBound": high_slope,
                 "Intercept": intercept,
-                "GrowthRate_window_start": curr_window[0] if curr_window is not None else np.nan,
-                "GrowthRate_window_end": curr_window[1] if curr_window is not None else np.nan,
-                "GrowthRate_fit": fit,
+                "GrowthRate_window_start": growth_rate_window[0],
+                "GrowthRate_window_end": growth_rate_window[1],
+                "GrowthRate_fit": curr_df["GrowthRate_fit"].values[0],
             }
         )
     growth_rate_df = pd.DataFrame(tmp_list)
