@@ -457,6 +457,8 @@ def estimate_game_parameters(
 
 # ---------------------------------------------------------------------------------------------------------------
 def calculate_fit(Y, Y_pred):
+    if np.mean(Y) == 0:
+        return np.nan
     return np.sqrt(np.mean((Y - Y_pred) ** 2)) / np.mean(Y)
 
 
@@ -468,11 +470,6 @@ def growth_rate_window_loss(X, Y):
 
 def optimize_growth_rate_window(df):
     """Input: counts dataframe for a given well."""
-    if df["Count"].min() <= 0:
-        df["GrowthRate_window_start"] = np.nan
-        df["GrowthRate_window_end"] = np.nan
-        df["GrowthRate_fit"] = np.nan
-        return df
     cell_types = df["CellType"].unique()
     pts = len(df["Time"].unique())
     min_pts = min(10, pts)
@@ -485,12 +482,19 @@ def optimize_growth_rate_window(df):
             losses = []
             for cell_type in cell_types:
                 df_ct = df[df["CellType"] == cell_type]
+                if df_ct["Count"].min() <= 0:
+                    continue
                 X_subset = df_ct["Time"].values[start:end]
                 Y_subset = np.log(df_ct["Count"].values[start:end])
                 loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
                 losses.append(loss)
             loss_list.append(np.mean(loss))
             subset_list.append((X_subset[0], X_subset[-1]))
+    if np.isnan(loss_list).all():
+        df["GrowthRate_window_start"] = np.nan
+        df["GrowthRate_window_end"] = np.nan
+        df["GrowthRate_fit"] = np.nan
+        return df
     min_loss_indx = np.argmin(loss_list)
     df["GrowthRate_window_start"] = subset_list[min_loss_indx][0]
     df["GrowthRate_window_end"] = subset_list[min_loss_indx][1]

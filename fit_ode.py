@@ -151,13 +151,13 @@ def fit(data_dir, exp_name, model, drug_concentration):
     # Trim to exponential growth rate window
     df_pivot = df.copy()
     trimmed = False
-    if model == "replicator":
-        df_pivot = df_pivot[
-            (df_pivot["Time"] >= df_pivot["GrowthRate_window_start"])
-            & (df_pivot["Time"] <= df_pivot["GrowthRate_window_end"])
-        ]
-        df_pivot["Time"] = df_pivot["Time"] - df_pivot["GrowthRate_window_start"]
-        trimmed = True
+    # if model == "replicator":
+    #     df_pivot = df_pivot[
+    #         (df_pivot["Time"] >= df_pivot["GrowthRate_window_start"])
+    #         & (df_pivot["Time"] <= df_pivot["GrowthRate_window_end"])
+    #     ]
+    #     df_pivot["Time"] = df_pivot["Time"] - df_pivot["GrowthRate_window_start"]
+    #     trimmed = True
 
     # Transform dataframe from long format to wide
     df_pivot = df_pivot.pivot(
@@ -268,8 +268,8 @@ def fit(data_dir, exp_name, model, drug_concentration):
             models_df[models_df["CellType"] == resistant]["GrowthRate"],
             models_df[models_df["CellType"] == resistant]["Resistant Estimated"],
         )
-        models_df.loc[models_df["CellType"] == resistant, "Frequency Dependent Fit"] = resistant_fit
-        models_df.loc[models_df["CellType"] == sensitive, "Frequency Dependent Fit"] = sensitive_fit
+        models_df.loc[models_df["CellType"] == resistant, "Frequency Dependence Fit"] = resistant_fit
+        models_df.loc[models_df["CellType"] == sensitive, "Frequency Dependence Fit"] = sensitive_fit
         models_df = models_df.drop(["Sensitive Estimated", "Resistant Estimated"], axis=1)
 
     # Save estimated counts
@@ -281,15 +281,16 @@ def fit(data_dir, exp_name, model, drug_concentration):
     if not os.path.exists(save_loc):
         os.mkdir(save_loc)
     plot_fits(save_loc, exp_name, model, df, models_df, cell_colors, dc=drug_concentration)
-    plot_freqdepend_fit(
-        save_loc,
-        exp_name,
-        model,
-        models_df,
-        cell_colors,
-        [sensitive, resistant],
-        dc=drug_concentration,
-    )
+    if model == "replicator":
+        plot_freqdepend_fit(
+            save_loc,
+            exp_name,
+            model,
+            models_df,
+            cell_colors,
+            [sensitive, resistant],
+            dc=drug_concentration,
+        )
 
 
 def main():

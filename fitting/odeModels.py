@@ -9,7 +9,7 @@ from fitting.odeModelClass import ODEModel
 
 # ======================== House Keeping Funs ==========================================
 def create_model(modelName, **kwargs):
-    funList = {"replicator": Replicator}
+    funList = {"replicator": Replicator, "lv": LotkaVolterra}
     return funList[modelName](**kwargs)
 
 
@@ -48,6 +48,52 @@ class Replicator(ODEModel):
         params.add('p_RR', value=1e-2, min=0, max=0.1, vary=True)
         params.add('p_SR', value=1e-2, min=0, max=0.1, vary=True)
         params.add('p_RS', value=1e-2, min=0, max=0.1, vary=True)
+        params.add('S0', value=50, min=0, max=1e4, vary=False)
+        params.add('R0', value=50, min=0, max=1e4, vary=False)
+        return params
+
+
+class LotkaVolterra(ODEModel):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.name = "replicator"
+        self.paramDic = {
+            **self.paramDic,
+            "r_S": 1.0,
+            "r_R": 1.0,
+            "a_SR": 1.0,
+            "a_SS": 1.0,
+            "a_RS": 1.0,
+            "a_RR": 1.0,
+            "k_S": 1000,
+            "k_R": 1000,
+            "S0": 750,
+            "R0": 750,
+        }
+        self.stateVars = ["S", "R"]
+
+    # The governing equations
+    def ModelEqns(self, t, uVec):
+        S, R, _ = uVec
+        dudtVec = np.zeros_like(uVec)
+        dudtVec[0] = (self.paramDic["r_S"] * S) * (1 - (self.paramDic["a_SS"] * S + self.paramDic["a_SR"] * R) / self.paramDic["k_S"])
+        dudtVec[1] = (self.paramDic["r_R"] * R) * (1 - (self.paramDic["a_RR"] * R + self.paramDic["a_RS"] * S) / self.paramDic["k_R"])
+        dudtVec[2] = 0
+        return dudtVec
+
+    def RunCellCountToTumourSizeModel(self, popModelSolDf):
+        return popModelSolDf["S"].values + popModelSolDf["R"].values
+
+    def get_params(self):
+        params = Parameters()
+        params.add('r_S', value=1e-2, min=0, max=0.1, vary=True)
+        params.add('r_R', value=1e-2, min=0, max=0.1, vary=True)
+        params.add('a_SS', value=1e-2, min=0, max=0.1, vary=True)
+        params.add('a_RR', value=1e-2, min=0, max=0.1, vary=True)
+        params.add('a_SR', value=1e-2, min=0, max=0.1, vary=True)
+        params.add('a_RS', value=1e-2, min=0, max=0.1, vary=True)
+        params.add('k_S', value=1000, min=0, max=10000, vary=True)
+        params.add('k_R', value=1000, min=0, max=10000, vary=True)
         params.add('S0', value=50, min=0, max=1e4, vary=False)
         params.add('R0', value=50, min=0, max=1e4, vary=False)
         return params

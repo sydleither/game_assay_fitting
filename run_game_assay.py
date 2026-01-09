@@ -143,6 +143,7 @@ def plot_fits(
 
     # Format figure and save
     fig.suptitle(f"{exp_name} {dc} Drug Concentration")
+    fig.patch.set_alpha(0.0)
     plt.savefig(f"{save_loc}/assay_{exp_name}_{dc}dc.png", bbox_inches="tight", dpi=200)
     plt.close()
 
