@@ -169,6 +169,15 @@ def plot_overlaid_gamespace(save_loc, df):
     plt.close()
 
 
+def plot_fits(save_loc, df, y):
+    fig, ax = plt.subplots(figsize=(4, 4))
+    sns.barplot(df, x="Model", y=y, ax=ax)
+    fig.patch.set_alpha(0.0)
+    fig.tight_layout()
+    fig.savefig(f"{save_loc}/ode_bar_{y}.png", bbox_inches="tight", dpi=200)
+    plt.close()
+
+
 def main():
     # Read in arguments
     parser = argparse.ArgumentParser()
@@ -201,14 +210,21 @@ def main():
         df.append(df_comb)
     df = pd.concat(df)
 
-    # Formatting for plots
+    # Formatting
     df = df[df["DrugConcentration"] == 0.0]
     mean_fit = df[["Model", "Experiment", "Fit"]].groupby(["Model", "Experiment"]).mean()
     mean_fit.reset_index()
     mean_fit = mean_fit.rename({"Fit": "Mean Count Fit"}, axis=1)
     df = df.merge(mean_fit, on=["Model", "Experiment"])
 
-    # Plot fitting results
+    # Save dataframe for referencing numbers in paper
+    df.drop_duplicates(subset=["Model", "Experiment"]).to_csv("ode_fits.csv", index=False)
+
+    # Plot generic fits
+    plot_fits(args.data_dir, df, "Fit")
+
+    # Plot replicator vs game assay
+    plot_fits(args.data_dir, df, "Frequency Dependence Fit")
     plot_gamespaces(args.data_dir, df, "Resistant Type")
     plot_gamespaces(args.data_dir, df, "Frequency Dependence Fit")
     plot_gamespaces(args.data_dir, df, "Mean Count Fit")
