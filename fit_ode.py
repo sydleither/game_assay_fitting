@@ -12,7 +12,7 @@ from fitting.fittingUtils import residual_multipleConditions
 from fitting.myUtils import ExtractTreatmentFromDf
 from fitting.odeModels import create_model
 from game_assay.game_analysis import calculate_counts, calculate_growth_rates
-from game_assay.game_analysis_utils import calculate_fit
+from game_assay.game_analysis_utils import calculate_fit_error
 from utils import get_cell_types
 
 
@@ -27,7 +27,7 @@ optimiser_kws = {
     "method": "least_squares",
     "xtol": 1e-8,
     "ftol": 1e-8,
-    "max_nfev": 500,
+    "max_nfev": 1000,
     "nan_policy": "omit",
     "verbose": 0,
 }
@@ -151,13 +151,13 @@ def fit(data_dir, exp_name, model, drug_concentration):
     # Trim to exponential growth rate window
     df_pivot = df.copy()
     trimmed = False
-    # if model == "replicator":
-    #     df_pivot = df_pivot[
-    #         (df_pivot["Time"] >= df_pivot["GrowthRate_window_start"])
-    #         & (df_pivot["Time"] <= df_pivot["GrowthRate_window_end"])
-    #     ]
-    #     df_pivot["Time"] = df_pivot["Time"] - df_pivot["GrowthRate_window_start"]
-    #     trimmed = True
+    if model == "replicator":
+        df_pivot = df_pivot[
+            (df_pivot["Time"] >= df_pivot["GrowthRate_window_start"])
+            & (df_pivot["Time"] <= df_pivot["GrowthRate_window_end"])
+        ]
+        df_pivot["Time"] = df_pivot["Time"] - df_pivot["GrowthRate_window_start"]
+        trimmed = True
 
     # Transform dataframe from long format to wide
     df_pivot = df_pivot.pivot(
@@ -237,17 +237,17 @@ def fit(data_dir, exp_name, model, drug_concentration):
         for p, v in ode_model.paramDic.items():
             model_df[p] = v
         # Get growth rate fit information
-        fit_sensitive = calculate_fit(
+        fit_sensitive = calculate_fit_error(
             df_rep[sensitive].values,
             model_df[model_df["CellType"] == sensitive]["Count"].values,
         )
-        fit_resistant = calculate_fit(
+        fit_resistant = calculate_fit_error(
             df_rep[resistant].values,
             model_df[model_df["CellType"] == resistant]["Count"].values,
         )
-        model_df["Fit"] = np.nan
-        model_df.loc[model_df["CellType"] == sensitive, "Fit"] = fit_sensitive
-        model_df.loc[model_df["CellType"] == resistant, "Fit"] = fit_resistant
+        model_df["Error"] = np.nan
+        model_df.loc[model_df["CellType"] == sensitive, "Error"] = fit_sensitive
+        model_df.loc[model_df["CellType"] == resistant, "Error"] = fit_resistant
         # Concat to experiment model df
         model_dfs.append(model_df)
     models_df = pd.concat(model_dfs)
@@ -260,16 +260,16 @@ def fit(data_dir, exp_name, model, drug_concentration):
         models_df["Resistant Estimated"] = (
             (models_df["p_RS"] - models_df["p_RR"]) * models_df[f"Fraction_{sensitive}"]
         ) + models_df["p_RR"]
-        sensitive_fit = calculate_fit(
+        sensitive_fit = calculate_fit_error(
             models_df[models_df["CellType"] == sensitive]["GrowthRate"],
             models_df[models_df["CellType"] == sensitive]["Sensitive Estimated"],
         )
-        resistant_fit = calculate_fit(
+        resistant_fit = calculate_fit_error(
             models_df[models_df["CellType"] == resistant]["GrowthRate"],
             models_df[models_df["CellType"] == resistant]["Resistant Estimated"],
         )
-        models_df.loc[models_df["CellType"] == resistant, "Frequency Dependence Fit"] = resistant_fit
-        models_df.loc[models_df["CellType"] == sensitive, "Frequency Dependence Fit"] = sensitive_fit
+        models_df.loc[models_df["CellType"] == resistant, "Frequency Dependence Error"] = resistant_fit
+        models_df.loc[models_df["CellType"] == sensitive, "Frequency Dependence Error"] = sensitive_fit
         models_df = models_df.drop(["Sensitive Estimated", "Resistant Estimated"], axis=1)
 
     # Save estimated counts

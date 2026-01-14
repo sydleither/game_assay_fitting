@@ -33,13 +33,13 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
     growth_rate_df = pd.read_csv(gr_path)
     payoff_df = pd.read_csv(payoff_path)
     # Transform payoff dataframe from wide format to long
-    payoff_df = payoff_df.drop(["fit"], axis=1)
-    payoff_df = pd.wide_to_long(payoff_df, stubnames=["Type", "fit"], i="DrugConcentration", j="n")
+    payoff_df = payoff_df.drop(["error"], axis=1)
+    payoff_df = pd.wide_to_long(payoff_df, stubnames=["Type", "error"], i="DrugConcentration", j="n")
     payoff_df = payoff_df.reset_index()
     payoff_df = payoff_df.rename(
         {
             "Type": "CellType",
-            "fit": "Frequency Dependence Fit",
+            "error": "Frequency Dependence Error",
             "p11": "p_SS",
             "p12": "p_SR",
             "p21": "p_RS",
@@ -53,7 +53,7 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
     # Format growth rate dataframe
     growth_rate_df = growth_rate_df.rename(
         {
-            "GrowthRate_fit": "Fit",
+            "GrowthRate_error": "Error",
             f"Fraction_{sensitive_type}": "Fraction Sensitive",
         },
         axis=1,
@@ -71,7 +71,7 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
             "Intercept",
             "GrowthRate_window_start",
             "GrowthRate_window_end",
-            "Fit",
+            "Error",
         ]
     ]
     # Combine dataframes
@@ -82,10 +82,10 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
 
 def plot_gamespaces(save_loc, df, hue):
     df = df.drop_duplicates(subset=["Model", "Experiment"])
-    df = df.dropna(subset=["Frequency Dependence Fit"], axis=0)
-    fit_hue = "fit" in hue.lower()
+    df = df.dropna(subset=["Frequency Dependence Error"], axis=0)
+    error_hue = "error" in hue.lower()
 
-    if fit_hue:
+    if error_hue:
         cmap = sns.color_palette("crest", as_cmap=True)
         norm = plt.Normalize(vmin=df[hue].min(), vmax=df[hue].max())
     else:
@@ -100,10 +100,10 @@ def plot_gamespaces(save_loc, df, hue):
         hue=hue,
         palette=cmap,
         hue_norm=norm,
-        legend=not fit_hue,
+        legend=not error_hue,
     )
 
-    if fit_hue:
+    if error_hue:
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
         facet.figure.subplots_adjust(right=1.165)
@@ -122,7 +122,7 @@ def plot_gamespaces(save_loc, df, hue):
 
 def plot_overlaid_gamespace(save_loc, df):
     df = df.drop_duplicates(subset=["Model", "Experiment"])
-    df = df.dropna(subset=["Frequency Dependence Fit"], axis=0)
+    df = df.dropna(subset=["Frequency Dependence Error"], axis=0)
     if len(df["Model"].unique()) > 2:
         print("Too many payoff-based models to overlay.")
         return
@@ -169,7 +169,7 @@ def plot_overlaid_gamespace(save_loc, df):
     plt.close()
 
 
-def plot_fits(save_loc, df, y):
+def plot_errors(save_loc, df, y):
     fig, ax = plt.subplots(figsize=(4, 4))
     sns.barplot(df, x="Model", y=y, ax=ax)
     fig.patch.set_alpha(0.0)
@@ -212,22 +212,19 @@ def main():
 
     # Formatting
     df = df[df["DrugConcentration"] == 0.0]
-    mean_fit = df[["Model", "Experiment", "Fit"]].groupby(["Model", "Experiment"]).mean()
-    mean_fit.reset_index()
-    mean_fit = mean_fit.rename({"Fit": "Mean Count Fit"}, axis=1)
-    df = df.merge(mean_fit, on=["Model", "Experiment"])
+    mean_error = df[["Model", "Experiment", "Error"]].groupby(["Model", "Experiment"]).mean()
+    mean_error.reset_index()
+    mean_error = mean_error.rename({"Error": "Mean Count Error"}, axis=1)
+    df = df.merge(mean_error, on=["Model", "Experiment"])
 
-    # Save dataframe for referencing numbers in paper
-    df.drop_duplicates(subset=["Model", "Experiment"]).to_csv("ode_fits.csv", index=False)
-
-    # Plot generic fits
-    plot_fits(args.data_dir, df, "Fit")
+    # Plot generic errors
+    plot_errors(args.data_dir, df, "Error")
 
     # Plot replicator vs game assay
-    plot_fits(args.data_dir, df, "Frequency Dependence Fit")
+    plot_errors(args.data_dir, df, "Frequency Dependence Error")
     plot_gamespaces(args.data_dir, df, "Resistant Type")
-    plot_gamespaces(args.data_dir, df, "Frequency Dependence Fit")
-    plot_gamespaces(args.data_dir, df, "Mean Count Fit")
+    plot_gamespaces(args.data_dir, df, "Frequency Dependence Error")
+    plot_gamespaces(args.data_dir, df, "Mean Count Error")
     plot_gamespaces(args.data_dir, df, "Experiment")
     plot_overlaid_gamespace(args.data_dir, df)
 

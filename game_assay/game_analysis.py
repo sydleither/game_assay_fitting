@@ -161,10 +161,10 @@ def calculate_growth_rates(
             or curr_df["Count"].mean() < count_threshold
             or np.isnan(growth_rate_window[0])
         ):
-            slope, intercept, low_slope, high_slope = np.nan, np.nan, np.nan, np.nan
+            slope, intercept, low_slope, high_slope, error = np.nan, np.nan, np.nan, np.nan, np.nan
         # Estimate growth rate
         else:
-            slope, intercept, low_slope, high_slope = estimate_growth_rate(
+            slope, intercept, low_slope, high_slope, error = estimate_growth_rate(
                 data_df=counts_df[counts_df["PlateId"] == plate_id],
                 well_id=well_id,
                 cell_type=cell_type,
@@ -193,7 +193,7 @@ def calculate_growth_rates(
                 "Intercept": intercept,
                 "GrowthRate_window_start": growth_rate_window[0],
                 "GrowthRate_window_end": growth_rate_window[1],
-                "GrowthRate_fit": curr_df["GrowthRate_fit"].values[0],
+                "GrowthRate_error": error,
             }
         )
     growth_rate_df = pd.DataFrame(tmp_list)

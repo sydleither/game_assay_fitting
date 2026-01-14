@@ -364,7 +364,8 @@ def estimate_growth_rate(data_df, well_id=None, cell_type=None, growth_rate_wind
     x = curr_df["Time"].values - curr_df["Time"].values[0]  # Start the time at 0
     y = np.log(curr_df["Count"].values)  # Log-transform
     slope, intercept, low_slope, high_slope = stats.theilslopes(y, x)
-    return slope, intercept, low_slope, high_slope
+    error = calculate_fit_error(y, slope * x + intercept)
+    return slope, intercept, low_slope, high_slope, error
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -408,13 +409,13 @@ def estimate_game_parameters(
         )
         best_fit_func = lambda x: (theil_result.slope * x) + theil_result.intercept
         Y_pred = theil_result.slope * tmp_df[fraction_col] + theil_result.intercept
-        fit = calculate_fit(tmp_df[growth_rate_col], Y_pred)
+        error = calculate_fit_error(tmp_df[growth_rate_col], Y_pred)
         coeffs_dict[cell_type] = [
             best_fit_func(0),
             best_fit_func(1),
             theil_result.intercept,
             theil_result.slope,
-            fit,
+            error,
         ]
     # Transform into pay-off matrix entries. To do so, we need to find out the direction of the x-axis (i.e. whether
     # it's increasing for Type 1 or Type 2 as we go left to right).
@@ -446,8 +447,8 @@ def estimate_game_parameters(
             params_dict["r%d" % pop_id] = coeffs_dict[cell_type][2]
             params_dict["c%d%d" % (pop_id % 2 + 1, pop_id)] = coeffs_dict[cell_type][3]
         # Add quality of fit
-        params_dict["fit%d" % pop_id] = coeffs_dict[cell_type][4]
-    params_dict["fit"] = (params_dict["fit1"] + params_dict["fit2"]) / 2
+        params_dict["error%d" % pop_id] = coeffs_dict[cell_type][4]
+    params_dict["error"] = (params_dict["error1"] + params_dict["error2"]) / 2
     # Compute the game space position
     params_dict["Advantage_0"] = params_dict["p12"] - params_dict["p22"]
     params_dict["Advantage_1"] = params_dict["p21"] - params_dict["p11"]
@@ -456,7 +457,7 @@ def estimate_game_parameters(
 
 
 # ---------------------------------------------------------------------------------------------------------------
-def calculate_fit(Y, Y_pred):
+def calculate_fit_error(Y, Y_pred):
     if np.mean(Y) == 0:
         return np.nan
     return np.sqrt(np.mean((Y - Y_pred) ** 2)) / np.mean(Y)
@@ -465,38 +466,38 @@ def calculate_fit(Y, Y_pred):
 def growth_rate_window_loss(X, Y):
     slope, intercept, _, _ = stats.theilslopes(Y, X)
     Y_pred = slope * X + intercept
-    return calculate_fit(Y, Y_pred)
+    return calculate_fit_error(Y, Y_pred)
 
 
 def optimize_growth_rate_window(df):
     """Input: counts dataframe for a given well."""
     cell_types = df["CellType"].unique()
-    pts = len(df["Time"].unique())
-    min_pts = min(10, pts)
-    max_pts = min(25, pts)
+    times = sorted(df["Time"].unique())
+    pts = len(times)
+    min_pts = min(8, pts)
+    max_pts = min(16, pts)
     loss_list = []
     subset_list = []
     for subset_length in range(min_pts, max_pts):
         for start in range(pts - subset_length):
             end = start + subset_length
+            X_subset = times[start:end]
             losses = []
             for cell_type in cell_types:
                 df_ct = df[df["CellType"] == cell_type]
                 if df_ct["Count"].min() <= 0:
+                    losses.append(100)
                     continue
-                X_subset = df_ct["Time"].values[start:end]
                 Y_subset = np.log(df_ct["Count"].values[start:end])
                 loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
                 losses.append(loss)
-            loss_list.append(np.mean(loss))
+            loss_list.append(np.mean(losses))
             subset_list.append((X_subset[0], X_subset[-1]))
     if np.isnan(loss_list).all():
         df["GrowthRate_window_start"] = np.nan
         df["GrowthRate_window_end"] = np.nan
-        df["GrowthRate_fit"] = np.nan
         return df
     min_loss_indx = np.argmin(loss_list)
     df["GrowthRate_window_start"] = subset_list[min_loss_indx][0]
     df["GrowthRate_window_end"] = subset_list[min_loss_indx][1]
-    df["GrowthRate_fit"] = np.min(loss_list)
     return df
