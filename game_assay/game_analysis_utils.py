@@ -469,29 +469,32 @@ def growth_rate_window_loss(X, Y):
     return calculate_fit_error(Y, Y_pred)
 
 
-def optimize_growth_rate_window(df):
+def optimize_growth_rate_window(df, subset_length=10):
     """Input: counts dataframe for a given plate."""
     cell_types = df["CellType"].unique()
-    times = sorted(df["Time"].unique())
+    times = (
+        df.groupby("Time")[["WellId", "CellType"]]
+        .nunique()
+        .eq(df[["WellId", "CellType"]].nunique())
+        .index.tolist()
+    )
+    times = np.array(sorted(times))
     pts = len(times)
-    min_pts = min(7, pts)
-    max_pts = min(21, pts)
     losses = {}
-    for subset_length in range(min_pts, max_pts):
-        for start in range(pts - subset_length):
-            end = start + subset_length
-            X_subset = times[start:end]
-            gr_window = (X_subset[0], X_subset[-1])
-            losses[gr_window] = []
-            for well in df["WellId"].unique():
-                for cell_type in cell_types:
-                    df_ct = df[(df["CellType"] == cell_type) & (df["WellId"] == well)]
-                    if df_ct["Count"].min() <= 0:
-                        continue
-                    Y_subset = np.log(df_ct["Count"].values[start:end])
-                    loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
-                    losses[gr_window].append(loss)
-            losses[gr_window] = np.mean(losses[gr_window])
+    for start in range(pts - subset_length):
+        end = start + subset_length
+        X_subset = times[start:end]
+        gr_window = (X_subset[0], X_subset[-1])
+        losses[gr_window] = []
+        for well in df["WellId"].unique():
+            for cell_type in cell_types:
+                df_ct = df[(df["CellType"] == cell_type) & (df["WellId"] == well)]
+                if df_ct["Count"].min() <= 0:
+                    continue
+                Y_subset = np.log(df_ct["Count"].values[start:end])
+                loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
+                losses[gr_window].append(loss)
+        losses[gr_window] = np.mean(losses[gr_window])
     gr_window = min(losses, key=losses.get)
     df["GrowthRate_window_start"] = gr_window[0]
     df["GrowthRate_window_end"] = gr_window[1]

@@ -129,7 +129,7 @@ def plot_freqdepend_fit(save_loc, exp_name, model_name, models_df, cell_colors, 
     plt.close()
 
 
-def fit(data_dir, exp_name, model, drug_concentration):
+def fit(data_dir, exp_name, model, drug_concentration, trim=True):
     # Get data
     counts_df = calculate_counts(data_dir, exp_name)
     growth_rate_df = calculate_growth_rates(data_dir, exp_name, counts_df)
@@ -150,14 +150,12 @@ def fit(data_dir, exp_name, model, drug_concentration):
 
     # Trim to exponential growth rate window
     df_pivot = df.copy()
-    trimmed = False
-    if model == "replicator":
+    if trim:
         df_pivot = df_pivot[
             (df_pivot["Time"] >= df_pivot["GrowthRate_window_start"])
             & (df_pivot["Time"] <= df_pivot["GrowthRate_window_end"])
         ]
         df_pivot["Time"] = df_pivot["Time"] - df_pivot["GrowthRate_window_start"]
-        trimmed = True
 
     # Transform dataframe from long format to wide
     df_pivot = df_pivot.pivot(
@@ -228,7 +226,7 @@ def fit(data_dir, exp_name, model, drug_concentration):
             df[(df["UniqueId"] == rep)][["Time", "CellType"] + gr_cols],
             on=["Time", "CellType"],
         )
-        if trimmed:
+        if trim:
             model_df["Time"] = model_df["Time"] + model_df["GrowthRate_window_start"]
         model_df["PlateId"] = int(rep[0])
         model_df["WellId"] = rep[1:]
@@ -300,6 +298,7 @@ def main():
     parser.add_argument("-exp", "--exp_name", type=str, default=None)
     models = ["replicator", "lv"]
     parser.add_argument("-model", "--model", type=str, default="replicator", choices=models)
+    parser.add_argument("-trim", "--trim", type=int, default=1)
     args = parser.parse_args()
 
     # Fit model and save results
@@ -308,7 +307,7 @@ def main():
         if os.path.isfile(f"{args.data_dir}/{exp_name}") or exp_name == "layout_files":
             continue
         print(exp_name)
-        fit(args.data_dir, exp_name, args.model, 0)
+        fit(args.data_dir, exp_name, args.model, 0.0, True if args.trim == 1 else False)
 
 
 if __name__ == "__main__":

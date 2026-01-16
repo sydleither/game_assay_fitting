@@ -16,11 +16,11 @@ def read_and_format_ode(data_dir, exp_name, file_name, sensitive_type):
     model = file_name.split("_")[-2].title()
     df = pd.read_csv(f"{data_dir}/{exp_name}/{file_name}")
     df = df.drop(["Time", "Count"], axis=1).drop_duplicates()
+    df = df.rename({f"Fraction_{sensitive_type}": "Fraction Sensitive"}, axis=1)
     df["Model"] = model
     if model == "Replicator":
         df["Advantage Sensitive"] = df["p_SR"] - df["p_RR"]
         df["Advantage Resistant"] = df["p_RS"] - df["p_SS"]
-        df = df.rename({f"Fraction_{sensitive_type}": "Fraction Sensitive"}, axis=1)
     return df.reset_index(drop=True)
 
 
@@ -34,7 +34,9 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
     payoff_df = pd.read_csv(payoff_path)
     # Transform payoff dataframe from wide format to long
     payoff_df = payoff_df.drop(["error"], axis=1)
-    payoff_df = pd.wide_to_long(payoff_df, stubnames=["Type", "error"], i="DrugConcentration", j="n")
+    payoff_df = pd.wide_to_long(
+        payoff_df, stubnames=["Type", "error"], i="DrugConcentration", j="n"
+    )
     payoff_df = payoff_df.reset_index()
     payoff_df = payoff_df.rename(
         {
@@ -178,6 +180,34 @@ def plot_errors(save_loc, df, y):
     plt.close()
 
 
+def plot_errors_per_experiment(save_loc, df, y):
+    fig, ax = plt.subplots(figsize=(5, 8))
+    sns.barplot(df, x="Experiment", y=y, hue="Model", ax=ax)
+    ax.tick_params("x", rotation=90)
+    fig.patch.set_alpha(0.0)
+    fig.tight_layout()
+    fig.savefig(f"{save_loc}/ode_bar_{y}_exp.png", bbox_inches="tight", dpi=200)
+    plt.close()
+
+
+def plot_errors_scatter(save_loc, df, x, y, hue):
+    fig, ax = plt.subplots(figsize=(4, 4))
+    sns.scatterplot(df, x=x, y=y, hue=hue, alpha=0.5, ax=ax)
+    fig.patch.set_alpha(0.0)
+    fig.tight_layout()
+    fig.savefig(f"{save_loc}/ode_scatter_{x}_{y}_{hue}.png", bbox_inches="tight", dpi=200)
+    plt.close()
+
+
+def plot_errors_box(save_loc, df, x, y, hue):
+    fig, ax = plt.subplots(figsize=(4, 4))
+    sns.boxplot(df, x=x, y=y, hue=hue, ax=ax)
+    fig.patch.set_alpha(0.0)
+    fig.tight_layout()
+    fig.savefig(f"{save_loc}/ode_box_{x}_{y}_{hue}.png", bbox_inches="tight", dpi=200)
+    plt.close()
+
+
 def main():
     # Read in arguments
     parser = argparse.ArgumentParser()
@@ -216,11 +246,19 @@ def main():
     mean_error.reset_index()
     mean_error = mean_error.rename({"Error": "Mean Count Error"}, axis=1)
     df = df.merge(mean_error, on=["Model", "Experiment"])
+    df["Growth Rate Window Size"] = df["GrowthRate_window_end"] - df["GrowthRate_window_start"]
 
     # Plot generic errors
     plot_errors(args.data_dir, df, "Error")
+    plot_errors_per_experiment(args.data_dir, df, "Error")
+    plot_errors_scatter(args.data_dir, df, "Fraction Sensitive", "Error", "Model")
 
     # Plot replicator vs game assay
+    df = df[df["Model"].isin(["Game Assay", "Replicator"])]
+    df.to_csv("gr_window_subset.csv", index=False)
+    plot_errors_scatter(args.data_dir, df, "GrowthRate_window_start", "Error", "Model")
+    plot_errors_box(args.data_dir, df, "Growth Rate Window Size", "Error", "Model")
+    plot_errors_per_experiment(args.data_dir, df, "Frequency Dependence Error")
     plot_errors(args.data_dir, df, "Frequency Dependence Error")
     plot_gamespaces(args.data_dir, df, "Resistant Type")
     plot_gamespaces(args.data_dir, df, "Frequency Dependence Error")
