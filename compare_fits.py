@@ -171,40 +171,42 @@ def plot_overlaid_gamespace(save_loc, df):
     plt.close()
 
 
-def plot_errors(save_loc, df, y):
+def plot_errors(save_loc, df, sns_plot, x, y, hue):
     fig, ax = plt.subplots(figsize=(4, 4))
-    sns.barplot(df, x="Model", y=y, ax=ax)
+    sns_plot(df, x=x, y=y, hue=hue, ax=ax)
+    title = f"{hue} {y} by {x}" if hue else f"{y} by {x}"
+    ax.set(title=title)
+    if x == "Experiment":
+        ax.tick_params("x", rotation=90)
     fig.patch.set_alpha(0.0)
     fig.tight_layout()
-    fig.savefig(f"{save_loc}/ode_bar_{y}.png", bbox_inches="tight", dpi=200)
+    fig.savefig(f"{save_loc}/ode_{x}_{y}_{hue}.png", bbox_inches="tight", dpi=200)
     plt.close()
 
 
-def plot_errors_per_experiment(save_loc, df, y):
-    fig, ax = plt.subplots(figsize=(5, 8))
-    sns.barplot(df, x="Experiment", y=y, hue="Model", ax=ax)
-    ax.tick_params("x", rotation=90)
-    fig.patch.set_alpha(0.0)
-    fig.tight_layout()
-    fig.savefig(f"{save_loc}/ode_bar_{y}_exp.png", bbox_inches="tight", dpi=200)
-    plt.close()
+def plot_params(save_loc, df, model):
+    if model == "Lv":
+        params = ["r_S", "r_R", "a_SR", "a_SS", "a_RS", "a_RR"]#, "k_S", "k_R"]
+    else:
+        params = ["p_SS", "p_SR", "p_RS", "p_RR"]
 
+    param_values = []
+    for param in params:
+        param_values.append(df[df["Model"] == model][param].values)
 
-def plot_errors_scatter(save_loc, df, x, y, hue):
     fig, ax = plt.subplots(figsize=(4, 4))
-    sns.scatterplot(df, x=x, y=y, hue=hue, alpha=0.5, ax=ax)
+    bp = ax.boxplot(
+        param_values,
+        tick_labels=params,
+        patch_artist=True,
+        medianprops={"color": "black"},
+    )
+    ax.set_title(f"{model} Parameters")
+    for patch in bp["boxes"]:
+        patch.set_facecolor("hotpink")
     fig.patch.set_alpha(0.0)
     fig.tight_layout()
-    fig.savefig(f"{save_loc}/ode_scatter_{x}_{y}_{hue}.png", bbox_inches="tight", dpi=200)
-    plt.close()
-
-
-def plot_errors_box(save_loc, df, x, y, hue):
-    fig, ax = plt.subplots(figsize=(4, 4))
-    sns.boxplot(df, x=x, y=y, hue=hue, ax=ax)
-    fig.patch.set_alpha(0.0)
-    fig.tight_layout()
-    fig.savefig(f"{save_loc}/ode_box_{x}_{y}_{hue}.png", bbox_inches="tight", dpi=200)
+    fig.savefig(f"{save_loc}/ode_params_{model}.png", bbox_inches="tight", dpi=200)
     plt.close()
 
 
@@ -246,25 +248,32 @@ def main():
     mean_error.reset_index()
     mean_error = mean_error.rename({"Error": "Mean Count Error"}, axis=1)
     df = df.merge(mean_error, on=["Model", "Experiment"])
-    df["Growth Rate Window Size"] = df["GrowthRate_window_end"] - df["GrowthRate_window_start"]
+    df["Binned Fraction Sensitive"] = df["Fraction Sensitive"].round(1)
+    df["Min Error"] = df.groupby("Model")["Error"].transform("min")
+    df["Max Error"] = df.groupby("Model")["Error"].transform("max")
+    df["Normalized Error"] = (df["Error"] - df["Min Error"]) / (df["Max Error"] - df["Min Error"])
 
     # Plot generic errors
-    plot_errors(args.data_dir, df, "Error")
-    plot_errors_per_experiment(args.data_dir, df, "Error")
-    plot_errors_scatter(args.data_dir, df, "Fraction Sensitive", "Error", "Model")
+    plot_errors(args.data_dir, df, sns.barplot, "Model", "Error", None)
+    plot_errors(args.data_dir, df, sns.barplot, "Experiment", "Error", "Model")
+    plot_errors(args.data_dir, df, sns.barplot, "Experiment", "Normalized Error", "Model")
+    plot_errors(args.data_dir, df, sns.lineplot, "Binned Fraction Sensitive", "Error", "Model")
+    plot_errors(args.data_dir, df, sns.lineplot, "GrowthRate_window_start", "Error", "Model")
 
     # Plot replicator vs game assay
     df = df[df["Model"].isin(["Game Assay", "Replicator"])]
-    df.to_csv("gr_window_subset.csv", index=False)
-    plot_errors_scatter(args.data_dir, df, "GrowthRate_window_start", "Error", "Model")
-    plot_errors_box(args.data_dir, df, "Growth Rate Window Size", "Error", "Model")
-    plot_errors_per_experiment(args.data_dir, df, "Frequency Dependence Error")
-    plot_errors(args.data_dir, df, "Frequency Dependence Error")
+    plot_errors(args.data_dir, df, sns.barplot, "Model", "Frequency Dependence Error", None)
+    plot_errors(args.data_dir, df, sns.barplot, "Experiment", "Frequency Dependence Error", "Model")
     plot_gamespaces(args.data_dir, df, "Resistant Type")
     plot_gamespaces(args.data_dir, df, "Frequency Dependence Error")
     plot_gamespaces(args.data_dir, df, "Mean Count Error")
     plot_gamespaces(args.data_dir, df, "Experiment")
     plot_overlaid_gamespace(args.data_dir, df)
+
+    # Plot params
+    plot_params(args.data_dir, df, "Game Assay")
+    plot_params(args.data_dir, df, "Replicator")
+    plot_params(args.data_dir, df, "Lv")
 
 
 if __name__ == "__main__":

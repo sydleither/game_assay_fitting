@@ -74,17 +74,16 @@ def plot_seeded_fraction(save_loc, df, cell_types):
 
 
 def plot_fits(
-    save_loc,
-    exp_name,
-    counts_df,
-    growth_rate_df,
-    cell_types,
-    cell_colors,
-    dc=0.0,
+    save_loc, exp_name, counts_df, growth_rate_df, cell_types, cell_colors, dc=0.0, log_space=False
 ):
     # Only for 1 drug concentration
-    counts_df_dc = counts_df[counts_df["DrugConcentration"] == dc]
+    counts_df_dc = counts_df[counts_df["DrugConcentration"] == dc].copy()
     growth_rate_df_dc = growth_rate_df[growth_rate_df["DrugConcentration"] == dc]
+
+    # Plot in log space if specifided
+    if log_space:
+        with np.errstate(divide="ignore"):
+            counts_df_dc["Count"] = np.log(counts_df_dc["Count"])
 
     # Set figure dimensions
     plates = sorted(counts_df_dc["PlateId"].unique())
@@ -138,13 +137,17 @@ def plot_fits(
                     if not np.isnan(gr_window[0]):
                         x = np.arange(gr_window[0], gr_window[1], 0.1)
                         y = gr["GrowthRate"] * (x - gr_window[0]) + gr["Intercept"]
-                        ax_curr.plot(x, np.exp(y), color="black", alpha=0.5, linewidth=3)
+                        if not log_space:
+                            y = np.exp(y)
+                        ax_curr.plot(x, y, color="black", alpha=0.5, linewidth=3)
                 ax_curr.set(title=f"Plate {plate} Well {row}{col}", ylim=(0, y_max))
 
     # Format figure and save
     fig.suptitle(f"{exp_name} {dc} Drug Concentration")
     fig.patch.set_alpha(0.0)
-    plt.savefig(f"{save_loc}/assay_{exp_name}_{dc}dc.png", bbox_inches="tight", dpi=200)
+    plt.savefig(
+        f"{save_loc}/assay_{exp_name}_{dc}dc_{log_space}log.png", bbox_inches="tight", dpi=200
+    )
     plt.close()
 
 
@@ -175,9 +178,7 @@ def plot_freqdepend_fit(save_loc, exp_name, gr_df, payoff_df, cell_colors, cell_
         )
     ax.set_title(f"{exp_name}\n{dc} Drug Concentration")
     fig.patch.set_alpha(0.0)
-    plt.savefig(
-        f"{save_loc}/assay_freqdepend_{exp_name}_{dc}dc.png", bbox_inches="tight", dpi=200
-    )
+    plt.savefig(f"{save_loc}/assay_freqdepend_{exp_name}_{dc}dc.png", bbox_inches="tight", dpi=200)
     plt.close()
 
 
@@ -243,6 +244,9 @@ def individual_analysis(data_dir, exp_name, dynamic_gr=True, rewrite=True):
 
     # Plot fits for no drug condition
     plot_fits(save_loc, exp_name, counts_df, growth_rate_df, cell_types, cell_colors)
+    plot_fits(
+        save_loc, exp_name, counts_df, growth_rate_df, cell_types, cell_colors, log_space=True
+    )
     plot_freqdepend_fit(save_loc, exp_name, growth_rate_df, payoff_df, cell_colors, cell_types)
 
     # Plot spatial visualizations

@@ -266,8 +266,12 @@ def fit(data_dir, exp_name, model, drug_concentration, trim=True):
             models_df[models_df["CellType"] == resistant]["GrowthRate"],
             models_df[models_df["CellType"] == resistant]["Resistant Estimated"],
         )
-        models_df.loc[models_df["CellType"] == resistant, "Frequency Dependence Error"] = resistant_fit
-        models_df.loc[models_df["CellType"] == sensitive, "Frequency Dependence Error"] = sensitive_fit
+        models_df.loc[models_df["CellType"] == resistant, "Frequency Dependence Error"] = (
+            resistant_fit
+        )
+        models_df.loc[models_df["CellType"] == sensitive, "Frequency Dependence Error"] = (
+            sensitive_fit
+        )
         models_df = models_df.drop(["Sensitive Estimated", "Resistant Estimated"], axis=1)
 
     # Save estimated counts

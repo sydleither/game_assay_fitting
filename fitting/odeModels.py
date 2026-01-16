@@ -59,12 +59,12 @@ class LotkaVolterra(ODEModel):
         self.name = "replicator"
         self.paramDic = {
             **self.paramDic,
-            "r_S": 1.0,
-            "r_R": 1.0,
-            "a_SR": 1.0,
-            "a_SS": 1.0,
-            "a_RS": 1.0,
-            "a_RR": 1.0,
+            "r_S": 0.1,
+            "r_R": 0.1,
+            "a_SR": 0.1,
+            "a_SS": 0.1,
+            "a_RS": 0.1,
+            "a_RR": 0.1,
             "k_S": 1000,
             "k_R": 1000,
             "S0": 750,
