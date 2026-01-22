@@ -1,11 +1,7 @@
 import argparse
-from datetime import date
 import string
 
-import pandas as pd
-
 from EGT_HAL.config_utils import latin_hybercube_sample, write_config, write_run_scripts
-from run_game_assay import plot_gamespace
 
 
 def main():
@@ -18,8 +14,8 @@ def main():
     )
     parser.add_argument("-seed", "--seed", type=int, default=42)
     parser.add_argument("-samples", "--num_samples", type=int, default=None)
-    parser.add_argument("-lgr", "--lower_game_range", type=float, default=0.01)
-    parser.add_argument("-ugr", "--upper_game_range", type=float, default=0.09)
+    parser.add_argument("-lgr", "--lower_game_range", type=float, default=0.001)
+    parser.add_argument("-ugr", "--upper_game_range", type=float, default=0.099)
     parser.add_argument("-x", "--grid_x", type=int, default=100)
     parser.add_argument("-y", "--grid_y", type=int, default=100)
     parser.add_argument("-m", "--interaction_radius", type=int, default=2)
@@ -47,7 +43,7 @@ def main():
             [lgr, lgr, lgr, lgr],
             [ugr, ugr, ugr, ugr],
             [False, False, False, False],
-            rnd=2,
+            rnd=3,
             seed=args.seed,
         )
 
@@ -59,10 +55,10 @@ def main():
     # Create ABM configs
     run_output = []
     for s, sample in enumerate(samples):
+        payoff = [sample["A"], sample["B"], sample["C"], sample["D"]]
         for plate in [1]:
             exp_name = f"{args.experiment_name}/{s}/{plate}"
             run_str = f"{args.run_command} ../{args.data_type} {exp_name}"
-            payoff = [sample["A"], sample["B"], sample["C"], sample["D"]]
             for i, fs in enumerate(seeding):
                 for rep, row in enumerate(rowids):
                     config_name = f"{row}{colids[i]}"
@@ -84,15 +80,6 @@ def main():
                     )
                     run_output.append(f"{run_str} {config_name} 2D {rep}\n")
     write_run_scripts(args.data_type, args.experiment_name, run_output)
-
-    # Plot true game space
-    today = date.today().strftime("%Y%m%d")
-    for s, sample in enumerate(samples):
-        sample["True"] = f"{today}_sensitive_green_vs_resistant_pink_s{s}"
-    df = pd.DataFrame(samples)
-    df["Advantage_0"] = df["B"] - df["D"]
-    df["Advantage_1"] = df["C"] - df["A"]
-    plot_gamespace(f"{args.data_type}/{args.experiment_name}", df, "True")
 
 
 if __name__ == "__main__":

@@ -82,6 +82,33 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
     return df.reset_index(drop=True)
 
 
+def get_fit_df(data_dir):
+    df = []
+    for exp_name in os.listdir(data_dir):
+        if os.path.isfile(f"{data_dir}/{exp_name}") or exp_name == "layout_files":
+            continue
+        sensitive_type, resistant_type = get_cell_types(exp_name)
+        # Read in ODE fit data
+        df_ode = []
+        for file_name in os.listdir(f"{data_dir}/{exp_name}"):
+            if file_name.split("_")[-1] == "fit.csv":
+                df_ode.append(
+                    read_and_format_ode(data_dir, exp_name, file_name, sensitive_type)
+                )
+        if len(df_ode) == 0:
+            continue
+        df_ode = pd.concat(df_ode)
+        # Read in game assay fit data
+        df_assay = read_and_format_game_assay(data_dir, exp_name, sensitive_type)
+        # Merge game assay and ODE dataframes
+        df_comb = pd.concat([df_ode, df_assay])
+        df_comb["Experiment"] = exp_name
+        df_comb["Resistant Type"] = resistant_type
+        df.append(df_comb)
+    df = pd.concat(df)
+    return df
+
+
 def plot_gamespaces(save_loc, df, hue):
     df = df.drop_duplicates(subset=["Model", "Experiment"])
     df = df.dropna(subset=["Frequency Dependence Error"], axis=0)
@@ -218,29 +245,7 @@ def main():
     args = parser.parse_args()
 
     # Read in fitting data
-    df = []
-    for exp_name in os.listdir(args.data_dir):
-        if os.path.isfile(f"{args.data_dir}/{exp_name}") or exp_name == "layout_files":
-            continue
-        sensitive_type, resistant_type = get_cell_types(exp_name)
-        # Read in ODE fit data
-        df_ode = []
-        for file_name in os.listdir(f"{args.data_dir}/{exp_name}"):
-            if file_name.split("_")[-1] == "fit.csv":
-                df_ode.append(
-                    read_and_format_ode(args.data_dir, exp_name, file_name, sensitive_type)
-                )
-        if len(df_ode) == 0:
-            continue
-        df_ode = pd.concat(df_ode)
-        # Read in game assay fit data
-        df_assay = read_and_format_game_assay(args.data_dir, exp_name, sensitive_type)
-        # Merge game assay and ODE dataframes
-        df_comb = pd.concat([df_ode, df_assay])
-        df_comb["Experiment"] = exp_name
-        df_comb["Resistant Type"] = resistant_type
-        df.append(df_comb)
-    df = pd.concat(df)
+    df = get_fit_df(args.data_dir)
 
     # Formatting
     df = df[df["DrugConcentration"] == 0.0]
@@ -260,6 +265,10 @@ def main():
     plot_errors(args.data_dir, df, sns.lineplot, "Binned Fraction Sensitive", "Error", "Model")
     plot_errors(args.data_dir, df, sns.lineplot, "GrowthRate_window_start", "Error", "Model")
 
+    # Plot params
+    for model in df["Model"].unique():
+        plot_params(args.data_dir, df, model)
+
     # Plot replicator vs game assay
     df = df[df["Model"].isin(["Game Assay", "Replicator"])]
     plot_errors(args.data_dir, df, sns.barplot, "Model", "Frequency Dependence Error", None)
@@ -269,11 +278,6 @@ def main():
     plot_gamespaces(args.data_dir, df, "Mean Count Error")
     plot_gamespaces(args.data_dir, df, "Experiment")
     plot_overlaid_gamespace(args.data_dir, df)
-
-    # Plot params
-    plot_params(args.data_dir, df, "Game Assay")
-    plot_params(args.data_dir, df, "Replicator")
-    plot_params(args.data_dir, df, "Lv")
 
 
 if __name__ == "__main__":

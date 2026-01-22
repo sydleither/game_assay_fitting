@@ -470,12 +470,12 @@ def growth_rate_window_loss(X, Y):
 
 
 def optimize_growth_rate_window(df, subset_length=10):
-    """Input: counts dataframe for a given plate."""
+    """Input: counts dataframe for a given experiment."""
     cell_types = df["CellType"].unique()
     times = (
-        df.groupby("Time")[["WellId", "CellType"]]
+        df.groupby("Time")[["PlateId", "WellId", "CellType"]]
         .nunique()
-        .eq(df[["WellId", "CellType"]].nunique())
+        .eq(df[["PlateId", "WellId", "CellType"]].nunique())
         .index.tolist()
     )
     times = np.array(sorted(times))
@@ -486,14 +486,18 @@ def optimize_growth_rate_window(df, subset_length=10):
         X_subset = times[start:end]
         gr_window = (X_subset[0], X_subset[-1])
         losses[gr_window] = []
-        for well in df["WellId"].unique():
-            for cell_type in cell_types:
-                df_ct = df[(df["CellType"] == cell_type) & (df["WellId"] == well)]
-                if df_ct["Count"].min() <= 0:
-                    continue
-                Y_subset = np.log(df_ct["Count"].values[start:end])
-                loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
-                losses[gr_window].append(loss)
+        for plate in df["PlateId"].unique():
+            df_plate = df[df["PlateId"] == plate]
+            for well in df_plate["WellId"].unique():
+                for cell_type in cell_types:
+                    df_ct = df_plate[
+                        (df_plate["CellType"] == cell_type) & (df_plate["WellId"] == well)
+                    ]
+                    if df_ct["Count"].min() <= 0:
+                        continue
+                    Y_subset = np.log(df_ct["Count"].values[start:end])
+                    loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
+                    losses[gr_window].append(loss)
         losses[gr_window] = np.mean(losses[gr_window])
     gr_window = min(losses, key=losses.get)
     df["GrowthRate_window_start"] = gr_window[0]

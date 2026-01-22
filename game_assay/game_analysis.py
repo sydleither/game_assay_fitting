@@ -136,9 +136,7 @@ def calculate_growth_rates(
 
     # Calculate growth rate window
     if growth_rate_window is None:
-        counts_df = counts_df.groupby("PlateId", group_keys=False)[
-            counts_df.columns
-        ].apply(optimize_growth_rate_window)
+        counts_df = optimize_growth_rate_window(counts_df)
     else:
         counts_df["GrowthRate_window_start"] = growth_rate_window[0]
         counts_df["GrowthRate_window_end"] = growth_rate_window[1]
