@@ -1,7 +1,7 @@
 import argparse
 import string
 
-from EGT_HAL.config_utils import latin_hybercube_sample, write_config, write_run_scripts
+from EGT_HAL.config_utils import latin_hybercube_sample, write_spatialegt_config, write_run_scripts
 
 
 def main():
@@ -10,7 +10,7 @@ def main():
     parser.add_argument("-dir", "--data_type", type=str, default="data/spatial_egt")
     parser.add_argument("-exp", "--experiment_name", type=str, default="raw")
     parser.add_argument(
-        "-run_cmd", "--run_command", type=str, default="java -cp build/:lib/* SpatialEGT.SpatialEGT"
+        "-run_cmd", "--run_command", type=str, default="java -cp build_spatialegt/:lib/* SpatialEGT.SpatialEGT"
     )
     parser.add_argument("-seed", "--seed", type=int, default=42)
     parser.add_argument("-samples", "--num_samples", type=int, default=None)
@@ -19,7 +19,7 @@ def main():
     parser.add_argument("-x", "--grid_x", type=int, default=100)
     parser.add_argument("-y", "--grid_y", type=int, default=100)
     parser.add_argument("-m", "--interaction_radius", type=int, default=2)
-    parser.add_argument("-n", "--reproduction_radius", type=int, default=1)
+    parser.add_argument("-n", "--reproduction_radius", type=int, default=2)
     parser.add_argument("-freq", "--write_freq", type=int, default=4)
     parser.add_argument("-end", "--end_time", type=int, default=80)
     args = parser.parse_args()
@@ -62,13 +62,13 @@ def main():
             for i, fs in enumerate(seeding):
                 for rep, row in enumerate(rowids):
                     config_name = f"{row}{colids[i]}"
-                    write_config(
+                    write_spatialegt_config(
                         args.data_type,
                         exp_name,
                         config_name,
                         rep,
                         payoff,
-                        int(0.01 * capacity),
+                        int(0.1 * capacity),
                         float(1 - fs),
                         x=args.grid_x,
                         y=args.grid_y,
