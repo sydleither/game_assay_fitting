@@ -1,17 +1,12 @@
 import argparse
-import os
-from warnings import filterwarnings
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from scipy.spatial.distance import euclidean
 import seaborn as sns
 
-from compare_fits import get_fit_df
+from compare_fits import get_fit_df, plot_errors
 from fitting.odeModels import create_model
-from utils import get_cell_types
-
-filterwarnings("ignore")
+from utils import abm_parameter_map
 
 
 def main():
@@ -37,7 +32,7 @@ def main():
         fit_params[model] = param_names
 
     # Get ground truth parameter names for ABM
-    gt_params = ["A", "B", "C", "D"]
+    gt_params = [x for x in gt_df.columns if x in abm_parameter_map()]
 
     # Extract out parameter values
     models = []
@@ -47,9 +42,31 @@ def main():
         models.append(fit_df_model)
     gt_df = gt_df[["Experiment"] + gt_params].drop_duplicates()
 
-    for model in models:
-        print(model)
-    print(gt_df)
+    # Combine fit and ground truth dataframes
+    gt_df["Model"] = "Ground Truth"
+    gt_df = gt_df.rename(columns=abm_parameter_map())
+    models.append(gt_df)
+    df = pd.concat(models)
+
+    # Pivot dataframe from wide to long
+    df = pd.melt(
+        df,
+        id_vars=["Model", "Experiment"],
+        value_vars=list(abm_parameter_map().values()),
+        var_name="Parameter",
+        value_name="Value",
+    )
+
+    # Get absolute differences
+    for param in abm_parameter_map().values():
+        for experiment in df["Experiment"].unique():
+            filt = (df["Experiment"] == experiment) & (df["Parameter"] == param)
+            gt_value = df[(df["Model"] == "Ground Truth") & filt]["Value"].values[0]
+            df.loc[filt, "Difference"] = gt_value - df["Value"]
+
+    # Plot differences
+    df_diff = df[df["Model"] != "Ground Truth"].dropna(axis=0)
+    plot_errors(args.data_dir, df_diff, sns.barplot, "Model", "Difference", "Parameter")
 
 
 if __name__ == "__main__":

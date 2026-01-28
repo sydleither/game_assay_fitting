@@ -92,9 +92,7 @@ def get_fit_df(data_dir):
         df_ode = []
         for file_name in os.listdir(f"{data_dir}/{exp_name}"):
             if file_name.split("_")[-1] == "fit.csv":
-                df_ode.append(
-                    read_and_format_ode(data_dir, exp_name, file_name, sensitive_type)
-                )
+                df_ode.append(read_and_format_ode(data_dir, exp_name, file_name, sensitive_type))
         if len(df_ode) == 0:
             continue
         df_ode = pd.concat(df_ode)
@@ -198,6 +196,27 @@ def plot_overlaid_gamespace(save_loc, df):
     plt.close()
 
 
+def plot_errors_facet(save_loc, df, sns_plot, x, y, hue, facet):
+    facet_grid = sns.FacetGrid(
+        df,
+        col=facet,
+        hue=hue,
+        hue_order=sorted(df[hue].unique()),
+        sharey=False,
+        height=4,
+        aspect=1,
+    )
+    facet_grid.map_dataframe(sns_plot, x=x, y=y)
+    if hue:
+        facet_grid.add_legend()
+    if x == "Experiment":
+        facet_grid.set_xticklabels([])
+    facet_grid.figure.patch.set_alpha(0.0)
+    facet_grid.tight_layout()
+    facet_grid.savefig(f"{save_loc}/ode_{x}_{y}_{hue}_{facet}.png", bbox_inches="tight", dpi=200)
+    plt.close()
+
+
 def plot_errors(save_loc, df, sns_plot, x, y, hue):
     fig, ax = plt.subplots(figsize=(4, 4))
     sns_plot(df, x=x, y=y, hue=hue, ax=ax)
@@ -213,7 +232,7 @@ def plot_errors(save_loc, df, sns_plot, x, y, hue):
 
 def plot_params(save_loc, df, model):
     if model == "Lv":
-        params = ["r_S", "r_R", "a_SR", "a_SS", "a_RS", "a_RR"]#, "k_S", "k_R"]
+        params = ["r_S", "r_R", "a_SR", "a_SS", "a_RS", "a_RR"]  # , "k_S", "k_R"]
     else:
         params = ["p_SS", "p_SR", "p_RS", "p_RR"]
 
@@ -254,14 +273,10 @@ def main():
     mean_error = mean_error.rename({"Error": "Mean Count Error"}, axis=1)
     df = df.merge(mean_error, on=["Model", "Experiment"])
     df["Binned Fraction Sensitive"] = df["Fraction Sensitive"].round(1)
-    df["Min Error"] = df.groupby("Model")["Error"].transform("min")
-    df["Max Error"] = df.groupby("Model")["Error"].transform("max")
-    df["Normalized Error"] = (df["Error"] - df["Min Error"]) / (df["Max Error"] - df["Min Error"])
 
     # Plot generic errors
     plot_errors(args.data_dir, df, sns.barplot, "Model", "Error", None)
-    plot_errors(args.data_dir, df, sns.barplot, "Experiment", "Error", "Model")
-    plot_errors(args.data_dir, df, sns.barplot, "Experiment", "Normalized Error", "Model")
+    plot_errors_facet(args.data_dir, df, sns.barplot, "Experiment", "Error", "Experiment", "Model")
     plot_errors(args.data_dir, df, sns.lineplot, "Binned Fraction Sensitive", "Error", "Model")
     plot_errors(args.data_dir, df, sns.lineplot, "GrowthRate_window_start", "Error", "Model")
 
@@ -272,7 +287,15 @@ def main():
     # Plot replicator vs game assay
     df = df[df["Model"].isin(["Game Assay", "Replicator"])]
     plot_errors(args.data_dir, df, sns.barplot, "Model", "Frequency Dependence Error", None)
-    plot_errors(args.data_dir, df, sns.barplot, "Experiment", "Frequency Dependence Error", "Model")
+    plot_errors_facet(
+        args.data_dir,
+        df,
+        sns.barplot,
+        "Experiment",
+        "Frequency Dependence Error",
+        "Experiment",
+        "Model",
+    )
     plot_gamespaces(args.data_dir, df, "Resistant Type")
     plot_gamespaces(args.data_dir, df, "Frequency Dependence Error")
     plot_gamespaces(args.data_dir, df, "Mean Count Error")
