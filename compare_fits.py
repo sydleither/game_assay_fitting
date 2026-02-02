@@ -3,11 +3,12 @@ import os
 from warnings import filterwarnings
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from scipy.spatial.distance import euclidean
 import seaborn as sns
 
-from utils import get_cell_types
+from utils import abm_parameter_map, get_cell_types
 
 filterwarnings("ignore")
 
@@ -201,7 +202,8 @@ def plot_errors_facet(save_loc, df, sns_plot, x, y, hue, facet):
         df,
         col=facet,
         hue=hue,
-        hue_order=sorted(df[hue].unique()),
+        hue_order=sorted(df[hue].unique()) if hue else None,
+        sharex=False,
         sharey=False,
         height=4,
         aspect=1,
@@ -230,30 +232,71 @@ def plot_errors(save_loc, df, sns_plot, x, y, hue):
     plt.close()
 
 
-def plot_params(save_loc, df, model):
-    if model == "Lv":
-        params = ["r_S", "r_R", "a_SR", "a_SS", "a_RS", "a_RR"]  # , "k_S", "k_R"]
+def classify_game(a, b, c, d):
+    if a > c and b > d:
+        game = "Sensitive Wins"
+    elif c > a and b > d:
+        game = "Coexistence"
+    elif a > c and d > b:
+        game = "Bistability"
+    elif c > a and d > b:
+        game = "Resistant Wins"
     else:
-        params = ["p_SS", "p_SR", "p_RS", "p_RR"]
+        game = np.nan
+    return game
 
-    param_values = []
-    for param in params:
-        param_values.append(df[df["Model"] == model][param].values)
 
-    fig, ax = plt.subplots(figsize=(4, 4))
-    bp = ax.boxplot(
-        param_values,
-        tick_labels=params,
-        patch_artist=True,
-        medianprops={"color": "black"},
+def get_fixed_points(r_S, r_R, a_SS, a_SR, a_RS, a_RR, k_S, k_R):
+    if np.any(np.isnan([r_S, r_R, a_SS, a_SR, a_RS, a_RR, k_S, k_R])):
+        return np.nan
+
+    A = np.array([[a_SS / k_S, a_SR / k_S], [a_RS / k_R, a_RR / k_R]])
+    A[np.abs(A) < 1e-10] = 0
+    r = [r_S, r_R]
+    try:
+        fixed_points = np.matmul(-np.linalg.inv(A), r)
+    except np.linalg.LinAlgError as err:
+        print(f"{err}: A={A.tolist()}, r={r}")
+        return np.nan
+
+    s_dynamic = fixed_points[0]
+    r_dyanmic = fixed_points[1]
+    if s_dynamic < 0 and r_dyanmic < 0:
+        return "Extinction"
+    elif s_dynamic > 0 and r_dyanmic < 0:
+        return "Sensitive Wins"
+    elif s_dynamic < 0 and r_dyanmic > 0:
+        return "Resistant Wins"
+    elif s_dynamic > 0 and r_dyanmic > 0:
+        return "Coexistence"
+    
+
+def qualitative_results(save_loc, df):
+    # Reduce dataframe
+    df = df[["Model", "Experiment"]+list(abm_parameter_map().values())].drop_duplicates()
+
+    # Get game quadrant of game-theoretic models
+    df["Game Quadrant"] = df.apply(
+        lambda x: classify_game(x["p_SS"], x["p_SR"], x["p_RS"], x["p_RR"]), axis=1
     )
-    ax.set_title(f"{model} Parameters")
-    for patch in bp["boxes"]:
-        patch.set_facecolor("hotpink")
-    fig.patch.set_alpha(0.0)
-    fig.tight_layout()
-    fig.savefig(f"{save_loc}/ode_params_{model}.png", bbox_inches="tight", dpi=200)
-    plt.close()
+
+    # Get fixed point dynamics of lotka-volterra models
+    df["Fixed Point Dynamics"] = df.apply(
+        lambda x: get_fixed_points(
+            x["r_S"], x["r_R"], x["a_SS"], x["a_SR"], x["a_RS"], x["a_RR"], x["k_S"], x["k_R"]
+        ),
+        axis=1,
+    )
+
+    # Combine LV and EGT long-term dynamics columns
+    df["Dynamic"] = df["Fixed Point Dynamics"].fillna(df["Game Quadrant"])
+    df = df[["Model", "Experiment", "Dynamic"]]
+
+    # Print table of classified dynamics
+    df_table = pd.pivot(df, index="Experiment", columns="Model", values="Dynamic")
+    print(df_table.to_markdown())
+
+    return df
 
 
 def main():
@@ -274,18 +317,18 @@ def main():
     df = df.merge(mean_error, on=["Model", "Experiment"])
     df["Binned Fraction Sensitive"] = df["Fraction Sensitive"].round(1)
 
+    # Qualitative results
+    qualitative_results("", df)
+
     # Plot generic errors
     plot_errors(args.data_dir, df, sns.barplot, "Model", "Error", None)
     plot_errors_facet(args.data_dir, df, sns.barplot, "Experiment", "Error", "Experiment", "Model")
     plot_errors(args.data_dir, df, sns.lineplot, "Binned Fraction Sensitive", "Error", "Model")
     plot_errors(args.data_dir, df, sns.lineplot, "GrowthRate_window_start", "Error", "Model")
 
-    # Plot params
-    for model in df["Model"].unique():
-        plot_params(args.data_dir, df, model)
-
     # Plot replicator vs game assay
     df = df[df["Model"].isin(["Game Assay", "Replicator"])]
+    plot_errors_facet(args.data_dir, df, sns.scatterplot, "Error", "Frequency Dependence Error", "Experiment", "Model")
     plot_errors(args.data_dir, df, sns.barplot, "Model", "Frequency Dependence Error", None)
     plot_errors_facet(
         args.data_dir,

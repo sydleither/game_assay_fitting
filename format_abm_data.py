@@ -107,7 +107,7 @@ def main():
                 "Layout File (Original)": "layout.xlsx",
                 "Location": "Local",
                 "Copied?": "y",
-                "Tags": ["pink", "green"],
+                "Tags": ["green", "pink"],
                 "Growth Rate Window": [24, 72],
                 "Minimum Cell Number": 10,
                 "Notes": "",

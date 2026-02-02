@@ -1,12 +1,38 @@
 import argparse
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from compare_fits import get_fit_df, plot_errors
+from compare_fits import get_fit_df, plot_errors, plot_errors_facet, qualitative_results
 from fitting.odeModels import create_model
 from utils import abm_parameter_map
+
+
+def quantitative_results(save_loc, df):
+    # Pivot dataframe from wide to long
+    df = pd.melt(
+        df,
+        id_vars=["Model", "Experiment"],
+        value_vars=list(abm_parameter_map().values()),
+        var_name="Parameter",
+        value_name="Value",
+    )
+
+    # Get absolute differences
+    for param in abm_parameter_map().values():
+        for experiment in df["Experiment"].unique():
+            filt = (df["Experiment"] == experiment) & (df["Parameter"] == param)
+            gt_value = df[(df["Model"] == "Ground Truth") & filt]["Value"].values[0]
+            df.loc[filt, "Difference"] = np.abs(gt_value - df["Value"])
+    df = df.dropna(axis=0)
+
+    # Plot differences
+    df_diff = df[df["Model"] != "Ground Truth"]
+    plot_errors_facet(save_loc, df_diff, sns.barplot, "Model", "Difference", None, "Parameter")
+    plot_errors_facet(save_loc, df, sns.barplot, "Model", "Value", None, "Parameter")
+    plot_errors_facet(save_loc, df, sns.scatterplot, "Model", "Value", None, "Parameter")
 
 
 def main():
@@ -48,25 +74,9 @@ def main():
     models.append(gt_df)
     df = pd.concat(models)
 
-    # Pivot dataframe from wide to long
-    df = pd.melt(
-        df,
-        id_vars=["Model", "Experiment"],
-        value_vars=list(abm_parameter_map().values()),
-        var_name="Parameter",
-        value_name="Value",
-    )
-
-    # Get absolute differences
-    for param in abm_parameter_map().values():
-        for experiment in df["Experiment"].unique():
-            filt = (df["Experiment"] == experiment) & (df["Parameter"] == param)
-            gt_value = df[(df["Model"] == "Ground Truth") & filt]["Value"].values[0]
-            df.loc[filt, "Difference"] = gt_value - df["Value"]
-
-    # Plot differences
-    df_diff = df[df["Model"] != "Ground Truth"].dropna(axis=0)
-    plot_errors(args.data_dir, df_diff, sns.barplot, "Model", "Difference", "Parameter")
+    # Save results
+    quantitative_results(args.data_dir, df)
+    qualitative_results(args.data_dir, df)
 
 
 if __name__ == "__main__":

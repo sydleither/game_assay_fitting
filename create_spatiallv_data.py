@@ -42,9 +42,9 @@ def main():
 
     # Mimic plate structure
     num_cells = int(0.1*capacity)
-    seeding = [0, 0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 0.95, 1]
-    colids = [2, 3, 4, 5, 6, 7, 8, 9, 10]
-    rowids = string.ascii_uppercase[1:7]
+    seeding = [0.1, 0.3, 0.5, 0.7, 0.9]
+    colids = [2, 3, 4, 5, 6]
+    rowids = string.ascii_uppercase[1:4]
 
     # Create ABM configs
     run_output = []
