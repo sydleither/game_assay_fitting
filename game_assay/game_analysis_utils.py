@@ -364,7 +364,7 @@ def estimate_growth_rate(data_df, well_id=None, cell_type=None, growth_rate_wind
     x = curr_df["Time"].values - curr_df["Time"].values[0]  # Start the time at 0
     y = np.log(curr_df["Count"].values)  # Log-transform
     slope, intercept, low_slope, high_slope = stats.theilslopes(y, x)
-    error = calculate_fit_error(y, slope * x + intercept)
+    error = calculate_fit_error(np.exp(y), np.exp(slope * x + intercept))
     return slope, intercept, low_slope, high_slope, error
 
 
@@ -466,7 +466,7 @@ def calculate_fit_error(Y, Y_pred):
 def growth_rate_window_loss(X, Y):
     slope, intercept, _, _ = stats.theilslopes(Y, X)
     Y_pred = slope * X + intercept
-    return calculate_fit_error(Y, Y_pred)
+    return calculate_fit_error(np.exp(Y), np.exp(Y_pred))
 
 
 def optimize_growth_rate_window(df, subset_length=10):

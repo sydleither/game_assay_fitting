@@ -303,7 +303,6 @@ def main():
     # Read in arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
-    parser.add_argument("-exp", "--exp_name", type=str, default=None)
     args = parser.parse_args()
 
     # Read in fitting data

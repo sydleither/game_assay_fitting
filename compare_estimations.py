@@ -39,7 +39,6 @@ def main():
     # Read in arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("-dir", "--data_dir", type=str, default="data/spatial_egt/formatted")
-    parser.add_argument("-exp", "--exp_name", type=str, default=None)
     args = parser.parse_args()
 
     # Get fits and ground truth
