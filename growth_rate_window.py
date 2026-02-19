@@ -3,15 +3,10 @@ import os
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from scipy.special import comb
 import seaborn as sns
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score
 
-from compare_fits import (
-    get_fit_df,
-    label_qualitative_dynamics,
-    plot_errors
-)
+from compare_fits import get_fit_df, label_qualitative_dynamics, plot_errors
 from fit_ode import fit
 from game_assay.game_analysis import (
     calculate_counts,
@@ -26,51 +21,55 @@ def plot_qualitative(data_dir, df, model):
     df_model = df[(df["Model"] == model) | (df["Model"] == "Ground Truth")]
     df_q = df_model[["Growth Rate Window", "Experiment", "Dynamic"]].drop_duplicates()
     gr_windows = df_model["Growth Rate Window"].unique()
-    num_axes = comb(len(gr_windows), 2, exact=True)
 
-    accuracies = []
-    fig, ax = plt.subplots(1, num_axes, figsize=(4 * num_axes, 4))
-    ax_num = 0
+    agreements = []
     for i in range(len(gr_windows)):
         for j in range(i + 1, len(gr_windows)):
-            labels = sorted(
-                df_q[df_q["Growth Rate Window"].isin([gr_windows[i], gr_windows[j]])][
-                    "Dynamic"
-                ].unique()
-            )
-            conf_mat = confusion_matrix(
-                df_q[df_q["Growth Rate Window"] == gr_windows[i]]["Dynamic"],
-                df_q[df_q["Growth Rate Window"] == gr_windows[j]]["Dynamic"],
-                labels=labels,
-            )
             acc = accuracy_score(
                 df_q[df_q["Growth Rate Window"] == gr_windows[i]]["Dynamic"],
                 df_q[df_q["Growth Rate Window"] == gr_windows[j]]["Dynamic"],
             )
-            df_conf_mat = pd.DataFrame(conf_mat, columns=labels, index=labels)
-            df_conf_mat.columns.name = gr_windows[j]
-            df_conf_mat.index.name = gr_windows[i]
-            sns.heatmap(df_conf_mat, annot=True, ax=ax[ax_num])
-            ax[ax_num].set(title=f"{gr_windows[i]} vs {gr_windows[j]}\nAgreement: {acc:5.3f}")
-            ax_num += 1
-            if gr_windows[i] == "Ground Truth":
-                accuracies.append({"Growth Rate Window": gr_windows[j], "Accuracy": acc})
-            elif gr_windows[j] == "Ground Truth":
-                accuracies.append({"Growth Rate Window": gr_windows[i], "Accuracy": acc})
-    fig.suptitle("Confusion Matrices for Growth Rate Window Dynamics")
+            agreements.append(
+                {
+                    "Growth Rate Window 1": gr_windows[i],
+                    "Growth Rate Window 2": gr_windows[j],
+                    "Agreement": acc,
+                }
+            )
+
+    df_agr = pd.DataFrame(agreements)
+    df_agr2 = df_agr.copy()
+    df_agr2["temp"] = df_agr2["Growth Rate Window 1"]
+    df_agr2["Growth Rate Window 1"] = df_agr2["Growth Rate Window 2"]
+    df_agr2["Growth Rate Window 2"] = df_agr2["temp"]
+    df_agr = pd.concat([df_agr, df_agr2])
+    df_acc = df_agr[df_agr["Growth Rate Window 1"] == "Ground Truth"].copy()
+    df_acc = df_acc.rename(
+        {"Growth Rate Window 2": "Growth Rate Window", "Agreement": "Accuracy"}, axis=1
+    )
+    df_agr = df_agr[
+        (df_agr["Growth Rate Window 1"] != "Ground Truth")
+        & (df_agr["Growth Rate Window 2"] != "Ground Truth")
+    ]
+    df_agr = df_agr.pivot(
+        index="Growth Rate Window 1", columns="Growth Rate Window 2", values="Agreement"
+    )
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    sns.heatmap(df_agr, annot=True, ax=ax)
+    ax.set_title(f"Agreement Between Growth Rate Windows for {model}")
     fig.patch.set_alpha(0.0)
     fig.tight_layout()
-    fig.savefig(f"{data_dir}/conf_mat_{model}.png", bbox_inches="tight", dpi=200)
+    fig.savefig(f"{data_dir}/agreement_{model}.png", bbox_inches="tight", dpi=200)
     plt.close()
 
-    if len(accuracies) > 0:
-        df_acc = pd.DataFrame(accuracies)
-        fig, ax = plt.subplots(figsize=(4, 4))
-        sns.barplot(df_acc, x="Growth Rate Window", y="Accuracy", ax=ax)
-        fig.patch.set_alpha(0.0)
-        fig.tight_layout()
-        fig.savefig(f"{data_dir}/accuracy_{model}.png", bbox_inches="tight", dpi=200)
-        plt.close()
+    fig, ax = plt.subplots(figsize=(4, 4))
+    sns.barplot(df_acc, x="Growth Rate Window", y="Accuracy", ax=ax)
+    ax.set_title(f"Accuracy of Growth Rate Windows for {model}")
+    fig.patch.set_alpha(0.0)
+    fig.tight_layout()
+    fig.savefig(f"{data_dir}/accuracy_{model}.png", bbox_inches="tight", dpi=200)
+    plt.close()
 
 
 def get_ground_truth(in_data_dir, df):
@@ -78,7 +77,7 @@ def get_ground_truth(in_data_dir, df):
         return df
     df_gt = pd.read_csv(f"{in_data_dir}/ground_truth.csv")
     df_gt = df_gt.rename(columns=abm_parameter_map())
-    params = [x for x in abm_parameter_map().values() if x in df.columns]
+    params = [x for x in abm_parameter_map().values() if x in df_gt.columns]
     df_gt = df_gt[["Experiment"] + params]
     df_gt["Growth Rate Window"] = "Ground Truth"
     df_gt["Model"] = "Ground Truth"
@@ -101,7 +100,7 @@ def get_growth_rates(data_dir, in_dir):
     df["Error"] = df["Error"] / df["Window Size"]
 
     # Final formatting and return
-    df = get_ground_truth(f"{data_dir}/{in_dir}", df)
+    df = get_ground_truth(in_dir, df)
     df = label_qualitative_dynamics(df, ["Growth Rate Window", "Model", "Experiment"])
     df.loc[df["Growth Rate Window"] == "Extra_Dynamic", "Growth Rate Window"] = "Dynamic2"
     return df.reset_index()
@@ -165,10 +164,7 @@ def main():
     parser.add_argument("-in", "--in_dir", type=str, default="experimental")
     parser.add_argument("-out", "--out_dir", type=str, default="gr_experimental")
     parser.add_argument(
-        "-w",
-        "--window",
-        type=str,
-        choices=["none", "dynamic", "early", "extra_dynamic", "expert"]
+        "-w", "--window", type=str, choices=["none", "dynamic", "early", "extra_dynamic", "expert"]
     )
     parser.add_argument("-plot", "--plot", type=int, default=0)
     args = parser.parse_args()
@@ -200,11 +196,14 @@ def main():
 
     # Save results
     if args.plot == 1:
-        df = get_growth_rates(save_loc, args.in_dir)
+        df = get_growth_rates(save_loc, f"{args.data_dir}/{args.in_dir}")
         df_freqdepend = df[df["Model"] != "Lotka-Volterra"][
-            ["Growth Rate Window", "Frequency Dependence Error", "Model"]
+            ["Growth Rate Window", "Model", "Experiment", "Frequency Dependence Error"]
         ].drop_duplicates()
-        df_freqdepend.to_csv("temp.csv")
+
+        plot_qualitative(save_loc, df, "Game Assay")
+        plot_qualitative(save_loc, df, "Replicator")
+        plot_qualitative(save_loc, df, "Lv")  # "Lotka-Volterra")
 
         plot_errors(save_loc, df, sns.barplot, "Model", "Error", "Growth Rate Window")
         plot_errors(
@@ -233,10 +232,6 @@ def main():
             "Frequency Dependence Error",
             None,
         )
-
-        plot_qualitative(save_loc, df, "Game Assay")
-        plot_qualitative(save_loc, df, "Replicator")
-        plot_qualitative(save_loc, df, "Lotka-Volterra")
 
 
 if __name__ == "__main__":

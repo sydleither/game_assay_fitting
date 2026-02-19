@@ -105,6 +105,7 @@ def get_fit_df(data_dir):
         df_comb["Resistant Type"] = resistant_type
         df.append(df_comb)
     df = pd.concat(df)
+    df = df[df["DrugConcentration"] == 0.0]
     return df
 
 
@@ -312,7 +313,6 @@ def main():
     df = get_fit_df(args.data_dir)
 
     # Formatting
-    df = df[df["DrugConcentration"] == 0.0]
     mean_error = df[["Model", "Experiment", "Error"]].groupby(["Model", "Experiment"]).mean()
     mean_error.reset_index()
     mean_error = mean_error.rename({"Error": "Mean Count Error"}, axis=1)
