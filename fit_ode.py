@@ -306,7 +306,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
     parser.add_argument("-exp", "--exp_name", type=str, default=None)
-    models = ["replicator", "lv"]
+    models = ["replicator", "lotka-volterra"]
     parser.add_argument("-model", "--model", type=str, default="replicator", choices=models)
     parser.add_argument("-trim", "--trim", type=int, default=1)
     args = parser.parse_args()

@@ -277,11 +277,11 @@ def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR, k_S, k_R):
     if species0_invasion_gr < 0 and species1_invasion_gr < 0:
         return "Bistability"
     return "Unknown"
-    
 
-def label_qualitative_dynamics(df):
+
+def label_qualitative_dynamics(df, keys=["Model", "Experiment"]):
     # Reduce dataframe
-    df_q = df[["Model", "Experiment"]+list(abm_parameter_map().values())].drop_duplicates()
+    df_q = df[keys + list(abm_parameter_map().values())].drop_duplicates()
 
     # Get game quadrant of game-theoretic models
     df_q["Game Quadrant"] = df_q.apply(
@@ -298,13 +298,8 @@ def label_qualitative_dynamics(df):
 
     # Combine LV and EGT long-term dynamics columns
     df_q["Dynamic"] = df_q["LV Dynamic"].fillna(df_q["Game Quadrant"])
-    df_q = df_q[["Model", "Experiment", "Dynamic"]]
-
-    # Print table of classified dynamics
-    df_table = pd.pivot(df_q, index="Experiment", columns="Model", values="Dynamic")
-    print(df_table.to_markdown())
-
-    return df.merge(df_q, on=["Model", "Experiment"])
+    df_q = df_q[keys + ["Dynamic"]]
+    return df.merge(df_q, on=keys)
 
 
 def main():
@@ -326,18 +321,24 @@ def main():
 
     # Qualitative results
     df = label_qualitative_dynamics(df)
-    df.to_csv("temp.csv")
-    exit()
 
-    # Plot generic errors
+    # Plot generic fitting errors
     plot_errors(args.data_dir, df, sns.barplot, "Model", "Error", None)
     plot_errors_facet(args.data_dir, df, sns.barplot, "Experiment", "Error", "Experiment", "Model")
     plot_errors(args.data_dir, df, sns.lineplot, "Binned Fraction Sensitive", "Error", "Model")
     plot_errors(args.data_dir, df, sns.lineplot, "GrowthRate_window_start", "Error", "Model")
 
-    # Plot replicator vs game assay
+    # Plot replicator vs game assay fitting errors
     df = df[df["Model"].isin(["Game Assay", "Replicator"])]
-    plot_errors_facet(args.data_dir, df, sns.scatterplot, "Error", "Frequency Dependence Error", "Experiment", "Model")
+    plot_errors_facet(
+        args.data_dir,
+        df,
+        sns.scatterplot,
+        "Error",
+        "Frequency Dependence Error",
+        "Experiment",
+        "Model",
+    )
     plot_errors(args.data_dir, df, sns.barplot, "Model", "Frequency Dependence Error", None)
     plot_errors_facet(
         args.data_dir,

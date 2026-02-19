@@ -9,7 +9,7 @@ from fitting.odeModelClass import ODEModel
 
 # ======================== House Keeping Funs ==========================================
 def create_model(modelName, **kwargs):
-    funList = {"replicator": Replicator, "lv": LotkaVolterra}
+    funList = {"replicator": Replicator, "lotka-volterra": LotkaVolterra}
     return funList[modelName](**kwargs)
 
 
