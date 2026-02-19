@@ -503,3 +503,28 @@ def optimize_growth_rate_window(df, subset_length=10):
     df["GrowthRate_window_start"] = gr_window[0]
     df["GrowthRate_window_end"] = gr_window[1]
     return df
+
+
+def optimize_growth_rate_window2(df, subset_length=10):
+    def optimize(df):
+        if df["Count"].min() <= 0:
+            df["GrowthRate_window_start"] = np.nan
+            df["GrowthRate_window_end"] = np.nan
+            df["GrowthRate_fit"] = np.nan
+            return df
+        pts = len(df["Time"].unique())
+        loss_list = []
+        subset_list = []
+        for start in range(pts - subset_length):
+            end = start + subset_length
+            X_subset = df["Time"].values[start:end]
+            Y_subset = np.log(df["Count"].values[start:end])
+            loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
+            loss_list.append(loss)
+            subset_list.append((X_subset[0], X_subset[-1]))
+        min_loss_indx = np.argmin(loss_list)
+        df["GrowthRate_window_start"] = subset_list[min_loss_indx][0]
+        df["GrowthRate_window_end"] = subset_list[min_loss_indx][1]
+        df["GrowthRate_fit"] = np.min(loss_list)
+        return df
+    return df.groupby(["PlateId", "WellId", "CellType"], group_keys=False)[df.columns].apply(optimize)

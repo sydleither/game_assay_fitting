@@ -215,17 +215,13 @@ def plot_spatial(save_loc, data_dir, df, cell_colors, times):
         plt.close()
 
 
-def individual_analysis(data_dir, exp_name, dynamic_gr=True, rewrite=True):
+def individual_analysis(data_dir, exp_name, rewrite=True):
     # Create images directory
     save_loc = f"{data_dir}/{exp_name}/images"
     if not os.path.exists(save_loc):
         os.mkdir(save_loc)
 
-    if dynamic_gr:
-        gr_window = None
-    else:
-        gr_window = get_growth_rate_window(data_dir, exp_name)
-
+    gr_window = get_growth_rate_window(data_dir, exp_name)
     counts_df = calculate_counts(data_dir, exp_name, rewrite)
     sensitive_type, resistant_type = get_cell_types(exp_name)
     cell_types = [sensitive_type, resistant_type]

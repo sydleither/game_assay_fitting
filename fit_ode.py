@@ -129,11 +129,16 @@ def plot_freqdepend_fit(save_loc, exp_name, model_name, models_df, cell_colors, 
     plt.close()
 
 
-def fit(data_dir, exp_name, model, drug_concentration, trim=True):
-    # Get data
-    counts_df = calculate_counts(data_dir, exp_name)
-    growth_rate_df = calculate_growth_rates(data_dir, exp_name, counts_df)
-
+def fit(
+    data_dir,
+    exp_name,
+    model,
+    counts_df,
+    growth_rate_df,
+    drug_concentration=0.0,
+    trim=True,
+    save_figs=True,
+):
     # Combine count and growth rate dataframes
     float_cols = counts_df.select_dtypes(include=["float64"]).columns
     common_cols = [
@@ -278,21 +283,22 @@ def fit(data_dir, exp_name, model, drug_concentration, trim=True):
     models_df.to_csv(f"{data_dir}/{exp_name}/{exp_name}_{model}_fit.csv", index=False)
 
     # Plot overview of estimated fits and parameters
-    cell_colors = {sensitive: "#4C956C", resistant: "#EF7C8E"}
-    save_loc = f"{data_dir}/{exp_name}/images"
-    if not os.path.exists(save_loc):
-        os.mkdir(save_loc)
-    plot_fits(save_loc, exp_name, model, df, models_df, cell_colors, dc=drug_concentration)
-    if model == "replicator":
-        plot_freqdepend_fit(
-            save_loc,
-            exp_name,
-            model,
-            models_df,
-            cell_colors,
-            [sensitive, resistant],
-            dc=drug_concentration,
-        )
+    if save_figs:
+        cell_colors = {sensitive: "#4C956C", resistant: "#EF7C8E"}
+        save_loc = f"{data_dir}/{exp_name}/images"
+        if not os.path.exists(save_loc):
+            os.mkdir(save_loc)
+        plot_fits(save_loc, exp_name, model, df, models_df, cell_colors, dc=drug_concentration)
+        if model == "replicator":
+            plot_freqdepend_fit(
+                save_loc,
+                exp_name,
+                model,
+                models_df,
+                cell_colors,
+                [sensitive, resistant],
+                dc=drug_concentration,
+            )
 
 
 def main():
@@ -311,7 +317,17 @@ def main():
         if os.path.isfile(f"{args.data_dir}/{exp_name}") or exp_name == "layout_files":
             continue
         print(exp_name)
-        fit(args.data_dir, exp_name, args.model, 0.0, True if args.trim == 1 else False)
+        counts_df = calculate_counts(args.data_dir, exp_name)
+        growth_rate_df = calculate_growth_rates(args.data_dir, exp_name, counts_df)
+        fit(
+            args.data_dir,
+            exp_name,
+            args.model,
+            counts_df,
+            growth_rate_df,
+            0.0,
+            True if args.trim == 1 else False,
+        )
 
 
 if __name__ == "__main__":

@@ -233,70 +233,78 @@ def plot_errors(save_loc, df, sns_plot, x, y, hue):
 
 
 def classify_game(a, b, c, d):
+    if np.any(np.isnan([a, b, c, d])):
+        return np.nan
     if a > c and b > d:
-        game = "Sensitive Wins"
-    elif c > a and b > d:
-        game = "Coexistence"
-    elif a > c and d > b:
-        game = "Bistability"
-    elif c > a and d > b:
-        game = "Resistant Wins"
-    else:
-        game = np.nan
-    return game
-
-
-def get_fixed_points(r_S, r_R, a_SS, a_SR, a_RS, a_RR, k_S, k_R):
-    if np.any(np.isnan([r_S, r_R, a_SS, a_SR, a_RS, a_RR, k_S, k_R])):
-        return np.nan
-
-    A = np.array([[a_SS / k_S, a_SR / k_S], [a_RS / k_R, a_RR / k_R]])
-    A[np.abs(A) < 1e-10] = 0
-    r = [r_S, r_R]
-    try:
-        fixed_points = np.matmul(-np.linalg.inv(A), r)
-    except np.linalg.LinAlgError as err:
-        print(f"{err}: A={A.tolist()}, r={r}")
-        return np.nan
-
-    s_dynamic = fixed_points[0]
-    r_dyanmic = fixed_points[1]
-    if s_dynamic < 0 and r_dyanmic < 0:
-        return "Extinction"
-    elif s_dynamic > 0 and r_dyanmic < 0:
         return "Sensitive Wins"
-    elif s_dynamic < 0 and r_dyanmic > 0:
-        return "Resistant Wins"
-    elif s_dynamic > 0 and r_dyanmic > 0:
+    if c > a and b > d:
         return "Coexistence"
+    if a > c and d > b:
+        return "Bistability"
+    if c > a and d > b:
+        return "Resistant Wins"
+    return "Unknown"
+
+
+def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR, k_S, k_R):
+    if np.any(np.isnan([r_S, r_R, a_SS, a_SR, a_RS, a_RR])):
+        return np.nan
+    if not np.any(np.isnan([k_S, k_R])):
+        a_SS = a_SS / k_S
+        a_SR = a_SR / k_S
+        a_RS = a_RS / k_R
+        a_RR = a_RR / k_R
+
+    # Biologically infeasible dynamics
+    species0_fp = -r_S / a_SS if a_SS != 0 else r_S
+    species1_fp = -r_R / a_RR if a_RR != 0 else r_R
+    if species0_fp < 0 and species1_fp < 0:
+        return "Extinction"
+    if species0_fp < 0:
+        return "Resistant Wins"
+    if species1_fp < 0:
+        return "Sensitive Wins"
+
+    # Biologically feasible dynamics
+    species0_invasion_gr = r_S + a_SR * (species1_fp)
+    species1_invasion_gr = r_R + a_RS * (species0_fp)
+    if species0_invasion_gr > 0 and species1_invasion_gr > 0:
+        return "Coexistence"
+    if species0_invasion_gr > 0 and species1_invasion_gr < 0:
+        return "Sensitive Wins"
+    if species0_invasion_gr < 0 and species1_invasion_gr > 0:
+        return "Resistant Wins"
+    if species0_invasion_gr < 0 and species1_invasion_gr < 0:
+        return "Bistability"
+    return "Unknown"
     
 
-def qualitative_results(save_loc, df):
+def label_qualitative_dynamics(df):
     # Reduce dataframe
-    df = df[["Model", "Experiment"]+list(abm_parameter_map().values())].drop_duplicates()
+    df_q = df[["Model", "Experiment"]+list(abm_parameter_map().values())].drop_duplicates()
 
     # Get game quadrant of game-theoretic models
-    df["Game Quadrant"] = df.apply(
+    df_q["Game Quadrant"] = df_q.apply(
         lambda x: classify_game(x["p_SS"], x["p_SR"], x["p_RS"], x["p_RR"]), axis=1
     )
 
     # Get fixed point dynamics of lotka-volterra models
-    df["Fixed Point Dynamics"] = df.apply(
-        lambda x: get_fixed_points(
+    df_q["LV Dynamic"] = df_q.apply(
+        lambda x: classify_lv_dynamic(
             x["r_S"], x["r_R"], x["a_SS"], x["a_SR"], x["a_RS"], x["a_RR"], x["k_S"], x["k_R"]
         ),
         axis=1,
     )
 
     # Combine LV and EGT long-term dynamics columns
-    df["Dynamic"] = df["Fixed Point Dynamics"].fillna(df["Game Quadrant"])
-    df = df[["Model", "Experiment", "Dynamic"]]
+    df_q["Dynamic"] = df_q["LV Dynamic"].fillna(df_q["Game Quadrant"])
+    df_q = df_q[["Model", "Experiment", "Dynamic"]]
 
     # Print table of classified dynamics
-    df_table = pd.pivot(df, index="Experiment", columns="Model", values="Dynamic")
+    df_table = pd.pivot(df_q, index="Experiment", columns="Model", values="Dynamic")
     print(df_table.to_markdown())
 
-    return df
+    return df.merge(df_q, on=["Model", "Experiment"])
 
 
 def main():
@@ -317,7 +325,9 @@ def main():
     df["Binned Fraction Sensitive"] = df["Fraction Sensitive"].round(1)
 
     # Qualitative results
-    qualitative_results("", df)
+    df = label_qualitative_dynamics(df)
+    df.to_csv("temp.csv")
+    exit()
 
     # Plot generic errors
     plot_errors(args.data_dir, df, sns.barplot, "Model", "Error", None)

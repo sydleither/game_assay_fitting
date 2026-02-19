@@ -65,8 +65,6 @@ class LotkaVolterra(ODEModel):
             "a_SS": 0.1,
             "a_RS": 0.1,
             "a_RR": 0.1,
-            "k_S": 1000,
-            "k_R": 1000,
             "S0": 750,
             "R0": 750,
         }
@@ -76,8 +74,8 @@ class LotkaVolterra(ODEModel):
     def ModelEqns(self, t, uVec):
         S, R, _ = uVec
         dudtVec = np.zeros_like(uVec)
-        dudtVec[0] = (self.paramDic["r_S"] * S) * (1 - (self.paramDic["a_SS"] * S + self.paramDic["a_SR"] * R) / self.paramDic["k_S"])
-        dudtVec[1] = (self.paramDic["r_R"] * R) * (1 - (self.paramDic["a_RR"] * R + self.paramDic["a_RS"] * S) / self.paramDic["k_R"])
+        dudtVec[0] = S * (self.paramDic["r_S"] + self.paramDic["a_SS"] * S + self.paramDic["a_SR"] * R)
+        dudtVec[1] = R * (self.paramDic["r_R"] + self.paramDic["a_RS"] * S + self.paramDic["a_RR"] * R)
         dudtVec[2] = 0
         return dudtVec
 
@@ -86,14 +84,12 @@ class LotkaVolterra(ODEModel):
 
     def get_params(self):
         params = Parameters()
-        params.add('r_S', value=1e-2, min=0, max=0.1, vary=True)
-        params.add('r_R', value=1e-2, min=0, max=0.1, vary=True)
-        params.add('a_SS', value=1e-2, min=0, max=0.1, vary=True)
-        params.add('a_RR', value=1e-2, min=0, max=0.1, vary=True)
-        params.add('a_SR', value=1e-2, min=0, max=0.1, vary=True)
-        params.add('a_RS', value=1e-2, min=0, max=0.1, vary=True)
-        params.add('k_S', value=1000, min=0, max=10000, vary=True)
-        params.add('k_R', value=1000, min=0, max=10000, vary=True)
-        params.add('S0', value=50, min=0, max=1e4, vary=False)
-        params.add('R0', value=50, min=0, max=1e4, vary=False)
+        params.add('r_S', value=1e-2, min=-1, max=1, vary=True)
+        params.add('r_R', value=1e-2, min=-1, max=1, vary=True)
+        params.add('a_SS', value=1e-2, min=-1, max=1, vary=True)
+        params.add('a_RR', value=1e-2, min=-1, max=1, vary=True)
+        params.add('a_SR', value=1e-2, min=-1, max=1, vary=True)
+        params.add('a_RS', value=1e-2, min=-1, max=1, vary=True)
+        params.add('S0', value=50, min=0, max=1e5, vary=False)
+        params.add('R0', value=50, min=0, max=1e5, vary=False)
         return params

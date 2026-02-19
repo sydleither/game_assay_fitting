@@ -134,12 +134,13 @@ def calculate_growth_rates(
     count_threshold = counts_df["Minimum Cell Number"].iloc[0]
     tmp_list = []
 
-    # Calculate growth rate window
-    if growth_rate_window is None:
-        counts_df = optimize_growth_rate_window(counts_df)
-    else:
+    # Define growth rate window
+    if growth_rate_window:
         counts_df["GrowthRate_window_start"] = growth_rate_window[0]
         counts_df["GrowthRate_window_end"] = growth_rate_window[1]
+    else:
+        if "GrowthRate_window_start" not in counts_df.columns:
+            raise RuntimeError("Please define a growth rate window.")
 
     for plate_id, well_id, cell_type in product(
         counts_df["PlateId"].unique(), counts_df["WellId"].unique(), cell_type_list
