@@ -13,8 +13,7 @@ from game_assay.game_analysis import (
     calculate_growth_rates,
     calculate_payoffs,
 )
-from game_assay.game_analysis_utils import optimize_growth_rate_window, optimize_growth_rate_window2
-from utils import abm_parameter_map, get_cell_types, get_growth_rate_window
+from utils import abm_parameter_map, get_cell_types
 
 
 def plot_qualitative(data_dir, df, model):
@@ -102,7 +101,6 @@ def get_growth_rates(data_dir, in_dir):
     # Final formatting and return
     df = get_ground_truth(in_dir, df)
     df = label_qualitative_dynamics(df, ["Growth Rate Window", "Model", "Experiment"])
-    df.loc[df["Growth Rate Window"] == "Extra_Dynamic", "Growth Rate Window"] = "Dynamic2"
     return df.reset_index()
 
 
@@ -116,26 +114,15 @@ def save_growth_rate(in_data_dir, out_data_dir, exp_name, window):
     counts_df = calculate_counts(in_data_dir, exp_name)
 
     if window == "none":
-        counts_df["GrowthRate_window_start"] = counts_df["Time"].min()
-        counts_df["GrowthRate_window_end"] = counts_df["Time"].max()
-    elif window == "dynamic":
-        counts_df = optimize_growth_rate_window(counts_df)
-    elif window == "extra_dynamic":
-        counts_df = optimize_growth_rate_window2(counts_df)
-    elif window == "expert":
-        gr_window = get_growth_rate_window(in_data_dir, exp_name)
-        counts_df["GrowthRate_window_start"] = gr_window[0]
-        counts_df["GrowthRate_window_end"] = gr_window[1]
-    elif window == "early":
-        counts_df["GrowthRate_window_start"] = 0
-        counts_df["GrowthRate_window_end"] = 40
+        gr_window = (counts_df["Time"].min(), counts_df["Time"].max())
     else:
-        raise ValueError("Illegal growth rate window option supplied.")
+        gr_window = None
 
     growth_rate_df = calculate_growth_rates(
         f"{out_data_dir}/{window}",
         exp_name,
         counts_df,
+        growth_rate_window=gr_window,
         cell_type_list=cell_types,
     )
 
@@ -163,9 +150,7 @@ def main():
     parser.add_argument("-dir", "--data_dir", type=str, default="data")
     parser.add_argument("-in", "--in_dir", type=str, default="experimental")
     parser.add_argument("-out", "--out_dir", type=str, default="gr_experimental")
-    parser.add_argument(
-        "-w", "--window", type=str, choices=["none", "dynamic", "early", "extra_dynamic", "expert"]
-    )
+    parser.add_argument("-w", "--window", type=str, choices=["none", "dynamic"])
     parser.add_argument("-plot", "--plot", type=int, default=0)
     args = parser.parse_args()
 
@@ -203,7 +188,7 @@ def main():
 
         plot_qualitative(save_loc, df, "Game Assay")
         plot_qualitative(save_loc, df, "Replicator")
-        plot_qualitative(save_loc, df, "Lv")  # "Lotka-Volterra")
+        plot_qualitative(save_loc, df, "Lotka-Volterra")
 
         plot_errors(save_loc, df, sns.barplot, "Model", "Error", "Growth Rate Window")
         plot_errors(

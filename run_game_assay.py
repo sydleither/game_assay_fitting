@@ -12,7 +12,7 @@ from game_assay.game_analysis import (
     calculate_locations,
     calculate_payoffs,
 )
-from utils import get_cell_types, get_growth_rate_window
+from utils import get_cell_types
 
 
 def plot_counts(save_loc, df, cell_colors):
@@ -221,13 +221,12 @@ def individual_analysis(data_dir, exp_name, rewrite=True):
     if not os.path.exists(save_loc):
         os.mkdir(save_loc)
 
-    gr_window = get_growth_rate_window(data_dir, exp_name)
     counts_df = calculate_counts(data_dir, exp_name, rewrite)
     sensitive_type, resistant_type = get_cell_types(exp_name)
     cell_types = [sensitive_type, resistant_type]
     cell_colors = {sensitive_type: "#4C956C", resistant_type: "#EF7C8E"}
     growth_rate_df = calculate_growth_rates(
-        data_dir, exp_name, counts_df, gr_window, cell_types, rewrite
+        data_dir, exp_name, counts_df, None, cell_types, rewrite
     )
     payoff_df = calculate_payoffs(
         data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}", rewrite

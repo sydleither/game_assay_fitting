@@ -73,6 +73,7 @@ def calculate_counts(data_dir, dir_curr_experiment, rewrite=False):
             ignore_column=None,
             tags=tags,
             pop_names=pop_names,
+            count_threshold=experiment["Minimum Cell Number"]
         )
         counts_df["PlateId"] = plate_id
         counts_df["ReplicateId"] = counts_df["RowId"].apply(
@@ -102,7 +103,6 @@ def calculate_counts(data_dir, dir_curr_experiment, rewrite=False):
         tmp_list_experiment.append(counts_df)
 
     counts_df = pd.concat(tmp_list_experiment)
-    counts_df["Minimum Cell Number"] = experiment["Minimum Cell Number"]
     counts_df.to_csv(cell_count_path, index=False)
     return counts_df
 
@@ -131,16 +131,14 @@ def calculate_growth_rates(
         for col in counts_df.columns
         if col not in ["Time", "Count", "ImageId", "CellType", "WellId", "PlateId"]
     ]
-    count_threshold = counts_df["Minimum Cell Number"].iloc[0]
     tmp_list = []
 
-    # Define growth rate window
+    # Calculate growth rate window
     if growth_rate_window:
         counts_df["GrowthRate_window_start"] = growth_rate_window[0]
         counts_df["GrowthRate_window_end"] = growth_rate_window[1]
     else:
-        if "GrowthRate_window_start" not in counts_df.columns:
-            raise RuntimeError("Please define a growth rate window.")
+        counts_df = optimize_growth_rate_window(counts_df)
 
     for plate_id, well_id, cell_type in product(
         counts_df["PlateId"].unique(), counts_df["WellId"].unique(), cell_type_list
@@ -154,14 +152,9 @@ def calculate_growth_rates(
             curr_df["GrowthRate_window_start"].values[0],
             curr_df["GrowthRate_window_end"].values[0],
         )
-        # Quality control data
-        if (
-            curr_df["Count"].min() <= 0
-            or curr_df["Count"].mean() < count_threshold
-            or np.isnan(growth_rate_window[0])
-        ):
-            slope, intercept, low_slope, high_slope, error = np.nan, np.nan, np.nan, np.nan, np.nan
         # Estimate growth rate
+        if curr_df["Count"].min() <= 0:
+            slope, intercept, low_slope, high_slope, error = np.nan, np.nan, np.nan, np.nan, np.nan
         else:
             slope, intercept, low_slope, high_slope, error = estimate_growth_rate(
                 data_df=counts_df[counts_df["PlateId"] == plate_id],

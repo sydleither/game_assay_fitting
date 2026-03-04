@@ -61,6 +61,7 @@ def load_cellprofiler_data(
     tags=["gfp", "texasred"],
     pop_names=["S", "R"],
     ignore_column=11,
+    count_threshold=0,
     long_format=True,
 ):
     """
@@ -89,6 +90,19 @@ def load_cellprofiler_data(
         .astype(int)
     )
     counts_raw_df["Time"] = (counts_raw_df["ImageId"] - 1) * imaging_frequency
+    # Clean count data
+    for cell_type in tags:
+        counts_raw_df["Mean_Count_%s_objects" % cell_type] = counts_raw_df.groupby("WellId")[
+            "Count_%s_objects" % cell_type
+        ].transform("mean")
+        counts_raw_df.loc[
+            counts_raw_df["Mean_Count_%s_objects" % cell_type] < count_threshold,
+            "Count_%s_objects" % cell_type,
+        ] = 0
+        counts_raw_df.loc[
+            counts_raw_df["Count_%s_objects" % cell_type] < 0, "Count_%s_objects" % cell_type
+        ] = 0
+    # Calculate frequencies
     counts_raw_df["Count_total"] = (
         counts_raw_df["Count_%s_objects" % tags[0]] + counts_raw_df["Count_%s_objects" % tags[1]]
     )
@@ -489,42 +503,28 @@ def optimize_growth_rate_window(df, subset_length=10):
         for plate in df["PlateId"].unique():
             df_plate = df[df["PlateId"] == plate]
             for well in df_plate["WellId"].unique():
+                df_well = df_plate[df_plate["WellId"] == well]
+                # Check if well should be skipped
+                skip = False
                 for cell_type in cell_types:
-                    df_ct = df_plate[
-                        (df_plate["CellType"] == cell_type) & (df_plate["WellId"] == well)
-                    ]
-                    if df_ct["Count"].min() <= 0:
-                        continue
-                    Y_subset = np.log(df_ct["Count"].values[start:end])
-                    loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
-                    losses[gr_window].append(loss)
+                    df_ct = df_well[df_well["CellType"] == cell_type]
+                    Y_subset = df_ct["Count"].values[start:end]
+                    if stats.variation(Y_subset) < 0.05:
+                        losses[gr_window].append(1)
+                        skip = True
+                    if min(Y_subset) <= 0:
+                        skip = True
+                # Calculate loss of well
+                if not skip:
+                    for cell_type in cell_types:
+                        df_ct = df_well[df_well["CellType"] == cell_type]
+                        Y_subset = np.log(df_ct["Count"].values[start:end])
+                        if np.var(Y_subset) <= 1e-3:
+                            continue
+                        loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
+                        losses[gr_window].append(loss)
         losses[gr_window] = np.mean(losses[gr_window])
     gr_window = min(losses, key=losses.get)
     df["GrowthRate_window_start"] = gr_window[0]
     df["GrowthRate_window_end"] = gr_window[1]
     return df
-
-
-def optimize_growth_rate_window2(df, subset_length=10):
-    def optimize(df):
-        if df["Count"].min() <= 0:
-            df["GrowthRate_window_start"] = np.nan
-            df["GrowthRate_window_end"] = np.nan
-            df["GrowthRate_fit"] = np.nan
-            return df
-        pts = len(df["Time"].unique())
-        loss_list = []
-        subset_list = []
-        for start in range(pts - subset_length):
-            end = start + subset_length
-            X_subset = df["Time"].values[start:end]
-            Y_subset = np.log(df["Count"].values[start:end])
-            loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
-            loss_list.append(loss)
-            subset_list.append((X_subset[0], X_subset[-1]))
-        min_loss_indx = np.argmin(loss_list)
-        df["GrowthRate_window_start"] = subset_list[min_loss_indx][0]
-        df["GrowthRate_window_end"] = subset_list[min_loss_indx][1]
-        df["GrowthRate_fit"] = np.min(loss_list)
-        return df
-    return df.groupby(["PlateId", "WellId", "CellType"], group_keys=False)[df.columns].apply(optimize)
