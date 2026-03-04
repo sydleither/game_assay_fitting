@@ -150,7 +150,6 @@ def fit(
         raise ValueError("Rows dropped when merging counts and growth rates!")
 
     # Subset to desired samples
-    df = df[~df["GrowthRate"].isna()]
     df = df[df["DrugConcentration"] == drug_concentration]
 
     # Trim to exponential growth rate window
@@ -308,7 +307,6 @@ def main():
     parser.add_argument("-exp", "--exp_name", type=str, default=None)
     models = ["replicator", "lotka-volterra"]
     parser.add_argument("-model", "--model", type=str, default="replicator", choices=models)
-    parser.add_argument("-trim", "--trim", type=int, default=1)
     args = parser.parse_args()
 
     # Fit model and save results
@@ -326,7 +324,7 @@ def main():
             counts_df,
             growth_rate_df,
             0.0,
-            True if args.trim == 1 else False,
+            True if args.model == "replicator" else False,
         )
 
 

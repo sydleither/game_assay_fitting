@@ -13,7 +13,7 @@ from game_assay.game_analysis import (
     calculate_growth_rates,
     calculate_payoffs,
 )
-from utils import abm_parameter_map, get_cell_types
+from utils import get_cell_types
 
 
 def plot_qualitative(data_dir, df, model):
@@ -75,9 +75,6 @@ def get_ground_truth(in_data_dir, df):
     if not os.path.exists(f"{in_data_dir}/ground_truth.csv"):
         return df
     df_gt = pd.read_csv(f"{in_data_dir}/ground_truth.csv")
-    df_gt = df_gt.rename(columns=abm_parameter_map())
-    params = [x for x in abm_parameter_map().values() if x in df_gt.columns]
-    df_gt = df_gt[["Experiment"] + params]
     df_gt["Growth Rate Window"] = "Ground Truth"
     df_gt["Model"] = "Ground Truth"
     return pd.concat([df, df_gt])

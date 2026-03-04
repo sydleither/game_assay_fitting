@@ -6,6 +6,23 @@ import os
 import pandas as pd
 
 
+def abm_parameter_map():
+    return {
+        "A": "p_SS",
+        "B": "p_SR",
+        "C": "p_RS",
+        "D": "p_RR",
+        "A_00": "a_SS",
+        "A_01": "a_SR",
+        "A_10": "a_RS",
+        "A_11": "a_RR",
+        "r_0": "r_S",
+        "r_1": "r_R",
+        "k_0": "k_S",
+        "k_1": "k_R",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dir", "--data_type", type=str, default="data/spatial_egt")
@@ -18,10 +35,9 @@ def main():
     out_dir = args.out_dir
     today_yyyymmdd = date.today().strftime("%y%m%d")
     today_mmddyyyy = date.today().strftime("%m/%d/%y")
-    os.mkdir(f"{data_dir}/{out_dir}")
 
     # Create layout.xlsx
-    os.mkdir(f"{data_dir}/{out_dir}/layout_files")
+    os.makedirs(f"{data_dir}/{out_dir}/layout_files")
     layout = []
     for _ in range(6):
         layout.append({j: 0.0 for j in range(2, 12)})
@@ -115,7 +131,11 @@ def main():
         )
 
     # Save ground truth
-    pd.DataFrame(ground_truth).to_csv(f"{data_dir}/{out_dir}/ground_truth.csv", index=False)
+    gt_df = pd.DataFrame(ground_truth)
+    gt_df = gt_df.rename(columns=abm_parameter_map())
+    params = [x for x in list(abm_parameter_map().values()) if x in gt_df.columns]
+    gt_df = gt_df[["Experiment"]+params].drop_duplicates()
+    gt_df.to_csv(f"{data_dir}/{out_dir}/ground_truth.csv", index=False)
     # Save overview.xlsx
     overview_df = pd.DataFrame(overview)
     overview_df["Date"] = pd.to_datetime(overview_df["Date"])

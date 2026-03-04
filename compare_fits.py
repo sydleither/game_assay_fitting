@@ -1,4 +1,5 @@
 import argparse
+from itertools import combinations
 import os
 from warnings import filterwarnings
 
@@ -7,12 +8,16 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import euclidean
 import seaborn as sns
+from sklearn.metrics import confusion_matrix
 
-from utils import abm_parameter_map, get_cell_types
+from utils import get_cell_types, get_parameter_names
 
 filterwarnings("ignore")
 
 
+##################
+# Data Wrangling #
+##################
 def read_and_format_ode(data_dir, exp_name, file_name, sensitive_type):
     model = file_name.split("_")[-2].title()
     df = pd.read_csv(f"{data_dir}/{exp_name}/{file_name}")
@@ -109,6 +114,79 @@ def get_fit_df(data_dir):
     return df
 
 
+def classify_game(a, b, c, d):
+    if np.any(np.isnan([a, b, c, d])):
+        return np.nan
+    if a > c and b > d:
+        return "Sensitive Wins"
+    if c > a and b > d:
+        return "Coexistence"
+    if a > c and d > b:
+        return "Bistability"
+    if c > a and d > b:
+        return "Resistant Wins"
+    return "Unknown"
+
+
+def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR, k_S, k_R):
+    if np.any(np.isnan([r_S, r_R, a_SS, a_SR, a_RS, a_RR])):
+        return np.nan
+    if not np.any(np.isnan([k_S, k_R])):
+        a_SS = a_SS / k_S
+        a_SR = a_SR / k_S
+        a_RS = a_RS / k_R
+        a_RR = a_RR / k_R
+
+    # Biologically infeasible dynamics
+    species0_fp = -r_S / a_SS if a_SS != 0 else r_S
+    species1_fp = -r_R / a_RR if a_RR != 0 else r_R
+    if species0_fp < 0 and species1_fp < 0:
+        return "Extinction"
+    if species0_fp < 0:
+        return "Resistant Wins"
+    if species1_fp < 0:
+        return "Sensitive Wins"
+
+    # Biologically feasible dynamics
+    species0_invasion_gr = r_S + a_SR * (species1_fp)
+    species1_invasion_gr = r_R + a_RS * (species0_fp)
+    if species0_invasion_gr > 0 and species1_invasion_gr > 0:
+        return "Coexistence"
+    if species0_invasion_gr > 0 and species1_invasion_gr < 0:
+        return "Sensitive Wins"
+    if species0_invasion_gr < 0 and species1_invasion_gr > 0:
+        return "Resistant Wins"
+    if species0_invasion_gr < 0 and species1_invasion_gr < 0:
+        return "Bistability"
+    return "Unknown"
+
+
+def label_qualitative_dynamics(df, keys=["Model", "Experiment"]):
+    # Reduce dataframe
+    df_q = df[keys + get_parameter_names()].drop_duplicates()
+
+    # Get game quadrant of game-theoretic models
+    df_q["Game Quadrant"] = df_q.apply(
+        lambda x: classify_game(x["p_SS"], x["p_SR"], x["p_RS"], x["p_RR"]), axis=1
+    )
+
+    # Get fixed point dynamics of lotka-volterra models
+    df_q["LV Dynamic"] = df_q.apply(
+        lambda x: classify_lv_dynamic(
+            x["r_S"], x["r_R"], x["a_SS"], x["a_SR"], x["a_RS"], x["a_RR"], x["k_S"], x["k_R"]
+        ),
+        axis=1,
+    )
+
+    # Combine LV and EGT long-term dynamics columns
+    df_q["Dynamic"] = df_q["LV Dynamic"].fillna(df_q["Game Quadrant"])
+    df_q = df_q[keys + ["Dynamic"]]
+    return df.merge(df_q, on=keys)
+
+
+#########
+# Plots #
+#########
 def plot_gamespaces(save_loc, df, hue):
     df = df.drop_duplicates(subset=["Model", "Experiment"])
     df = df.dropna(subset=["Frequency Dependence Error"], axis=0)
@@ -233,76 +311,54 @@ def plot_errors(save_loc, df, sns_plot, x, y, hue):
     plt.close()
 
 
-def classify_game(a, b, c, d):
-    if np.any(np.isnan([a, b, c, d])):
-        return np.nan
-    if a > c and b > d:
-        return "Sensitive Wins"
-    if c > a and b > d:
-        return "Coexistence"
-    if a > c and d > b:
-        return "Bistability"
-    if c > a and d > b:
-        return "Resistant Wins"
-    return "Unknown"
+def plot_qualitative(data_dir, df):
+    df = df[["Experiment", "Model", "Dynamic"]].copy().drop_duplicates()
+    models = df["Model"].unique()
+    model_combos = list(combinations(models, 2))
+    labels = sorted(df["Dynamic"].unique())
+    num_experiments = len(df["Experiment"].unique())
 
+    confusion_matrices = []
+    for model1, model2 in model_combos:
+        mat = confusion_matrix(
+            df[df["Model"] == model1]["Dynamic"],
+            df[df["Model"] == model2]["Dynamic"],
+            labels=labels,
+        )
+        confusion_matrices.append(mat)
 
-def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR, k_S, k_R):
-    if np.any(np.isnan([r_S, r_R, a_SS, a_SR, a_RS, a_RR])):
-        return np.nan
-    if not np.any(np.isnan([k_S, k_R])):
-        a_SS = a_SS / k_S
-        a_SR = a_SR / k_S
-        a_RS = a_RS / k_R
-        a_RR = a_RR / k_R
-
-    # Biologically infeasible dynamics
-    species0_fp = -r_S / a_SS if a_SS != 0 else r_S
-    species1_fp = -r_R / a_RR if a_RR != 0 else r_R
-    if species0_fp < 0 and species1_fp < 0:
-        return "Extinction"
-    if species0_fp < 0:
-        return "Resistant Wins"
-    if species1_fp < 0:
-        return "Sensitive Wins"
-
-    # Biologically feasible dynamics
-    species0_invasion_gr = r_S + a_SR * (species1_fp)
-    species1_invasion_gr = r_R + a_RS * (species0_fp)
-    if species0_invasion_gr > 0 and species1_invasion_gr > 0:
-        return "Coexistence"
-    if species0_invasion_gr > 0 and species1_invasion_gr < 0:
-        return "Sensitive Wins"
-    if species0_invasion_gr < 0 and species1_invasion_gr > 0:
-        return "Resistant Wins"
-    if species0_invasion_gr < 0 and species1_invasion_gr < 0:
-        return "Bistability"
-    return "Unknown"
-
-
-def label_qualitative_dynamics(df, keys=["Model", "Experiment"]):
-    # Reduce dataframe
-    df_q = df[keys + list(abm_parameter_map().values())].drop_duplicates()
-
-    # Get game quadrant of game-theoretic models
-    df_q["Game Quadrant"] = df_q.apply(
-        lambda x: classify_game(x["p_SS"], x["p_SR"], x["p_RS"], x["p_RR"]), axis=1
+    fig, ax = plt.subplots(
+        ncols=len(model_combos) + 1,
+        gridspec_kw=dict(width_ratios=[1] * len(model_combos) + [0.1]),
+        figsize=(4 * len(model_combos), 4),
     )
+    for i in range(len(model_combos)):
+        sns.heatmap(
+            confusion_matrices[i],
+            annot=True,
+            xticklabels=labels,
+            yticklabels=labels if i == 0 else [],
+            vmin=0,
+            vmax=num_experiments,
+            cbar=False,
+            ax=ax[i],
+        )
+        ax[i].set(
+            xlabel=model_combos[i][1],
+            ylabel=model_combos[i][0],
+            title=f"Agreement: {np.trace(confusion_matrices[i])/num_experiments:5.3f}",
+        )
+    fig.colorbar(ax[1].collections[0], cax=ax[-1])
+    ax[-1].set(ylabel="Number of Experiments")
+    fig.suptitle("Qualitative Agreement between Models")
+    fig.patch.set_alpha(0.0)
+    fig.savefig(f"{data_dir}/qualitative_agreement.png", bbox_inches="tight", dpi=200)
+    plt.close()
 
-    # Get fixed point dynamics of lotka-volterra models
-    df_q["LV Dynamic"] = df_q.apply(
-        lambda x: classify_lv_dynamic(
-            x["r_S"], x["r_R"], x["a_SS"], x["a_SR"], x["a_RS"], x["a_RR"], x["k_S"], x["k_R"]
-        ),
-        axis=1,
-    )
 
-    # Combine LV and EGT long-term dynamics columns
-    df_q["Dynamic"] = df_q["LV Dynamic"].fillna(df_q["Game Quadrant"])
-    df_q = df_q[keys + ["Dynamic"]]
-    return df.merge(df_q, on=keys)
-
-
+########
+# Main #
+########
 def main():
     # Read in arguments
     parser = argparse.ArgumentParser()
@@ -321,6 +377,7 @@ def main():
 
     # Qualitative results
     df = label_qualitative_dynamics(df)
+    plot_qualitative(args.data_dir, df)
 
     # Plot generic fitting errors
     plot_errors(args.data_dir, df, sns.barplot, "Model", "Error", None)
