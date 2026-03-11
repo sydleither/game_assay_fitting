@@ -65,6 +65,9 @@ class ODEModel():
         encounteredProblemB = False
         for intervalId, interval in enumerate(treatmentScheduleList):
             tVec = np.arange(interval[0], interval[1], self.dt)
+            # Handle floating point inaccuracy (Sydney)
+            if tVec[-1] >= interval[1]:
+                tVec = tVec[:-1]
             if intervalId == (len(treatmentScheduleList) - 1):
                 tVec = np.arange(interval[0], interval[1] + self.dt, self.dt)
                 # Floating point inaccuracies mean that it can happen that the 

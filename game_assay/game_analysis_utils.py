@@ -519,8 +519,6 @@ def optimize_growth_rate_window(df, subset_length=10):
                     for cell_type in cell_types:
                         df_ct = df_well[df_well["CellType"] == cell_type]
                         Y_subset = np.log(df_ct["Count"].values[start:end])
-                        if np.var(Y_subset) <= 1e-3:
-                            continue
                         loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
                         losses[gr_window].append(loss)
         losses[gr_window] = np.mean(losses[gr_window])
@@ -528,3 +526,41 @@ def optimize_growth_rate_window(df, subset_length=10):
     df["GrowthRate_window_start"] = gr_window[0]
     df["GrowthRate_window_end"] = gr_window[1]
     return df
+
+
+def optimize_growth_rate_window2(df, subset_length=10):
+    def optimize(df):
+        cell_types = df["CellType"].unique()
+        times = sorted(df["Time"].unique())
+        pts = len(df["Time"].unique())
+        loss_list = []
+        subset_list = []
+        for start in range(pts - subset_length):
+            end = start + subset_length
+            X_subset = times[start:end]
+            # Check if well should be skipped
+            skip = False
+            for cell_type in cell_types:
+                df_ct = df[df["CellType"] == cell_type]
+                Y_subset = df_ct["Count"].values[start:end]
+                if stats.variation(Y_subset) < 0.05:
+                    loss_list.append(1)
+                    skip = True
+                if min(Y_subset) <= 0:
+                    skip = True
+            # Calculate loss of well
+            if not skip:
+                avg_loss = []
+                for cell_type in cell_types:
+                    df_ct = df[df["CellType"] == cell_type]
+                    Y_subset = np.log(df_ct["Count"].values[start:end])
+                    loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
+                    avg_loss.append(loss)
+                loss_list.append(np.mean(avg_loss))
+            subset_list.append((X_subset[0], X_subset[-1]))
+        min_loss_indx = np.argmin(loss_list)
+        df["GrowthRate_window_start"] = subset_list[min_loss_indx][0]
+        df["GrowthRate_window_end"] = subset_list[min_loss_indx][1]
+        df["GrowthRate_fit"] = np.min(loss_list)
+        return df
+    return df.groupby(["PlateId", "WellId"], group_keys=False)[df.columns].apply(optimize)

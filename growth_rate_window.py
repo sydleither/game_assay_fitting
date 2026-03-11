@@ -13,12 +13,15 @@ from game_assay.game_analysis import (
     calculate_growth_rates,
     calculate_payoffs,
 )
+from game_assay.game_analysis_utils import optimize_growth_rate_window2
+from run_game_assay import plot_fits
 from utils import get_cell_types
 
 
 def plot_qualitative(data_dir, df, model):
     df_model = df[(df["Model"] == model) | (df["Model"] == "Ground Truth")]
     df_q = df_model[["Growth Rate Window", "Experiment", "Dynamic"]].drop_duplicates()
+    df_q = df_q.sort_values(by=["Growth Rate Window", "Experiment"])
     gr_windows = df_model["Growth Rate Window"].unique()
 
     agreements = []
@@ -110,10 +113,11 @@ def save_growth_rate(in_data_dir, out_data_dir, exp_name, window):
     cell_types = [sensitive_type, resistant_type]
     counts_df = calculate_counts(in_data_dir, exp_name)
 
+    gr_window = None
     if window == "none":
         gr_window = (counts_df["Time"].min(), counts_df["Time"].max())
-    else:
-        gr_window = None
+    elif window == "dynamic+":
+        counts_df = optimize_growth_rate_window2(counts_df)
 
     growth_rate_df = calculate_growth_rates(
         f"{out_data_dir}/{window}",
@@ -122,6 +126,8 @@ def save_growth_rate(in_data_dir, out_data_dir, exp_name, window):
         growth_rate_window=gr_window,
         cell_type_list=cell_types,
     )
+    cell_colors = {sensitive_type: "#4C956C", resistant_type: "#EF7C8E"}
+    plot_fits(save_loc, exp_name, counts_df, growth_rate_df, cell_types, cell_colors)
 
     calculate_payoffs(
         f"{out_data_dir}/{window}",
@@ -138,7 +144,7 @@ def save_growth_rate(in_data_dir, out_data_dir, exp_name, window):
         growth_rate_df,
         save_figs=False,
     )
-    fit(f"{out_data_dir}/{window}", exp_name, "lv", counts_df, growth_rate_df, save_figs=False)
+    fit(f"{out_data_dir}/{window}", exp_name, "lotka-volterra", counts_df, growth_rate_df, save_figs=False)
 
 
 def main():
@@ -147,7 +153,7 @@ def main():
     parser.add_argument("-dir", "--data_dir", type=str, default="data")
     parser.add_argument("-in", "--in_dir", type=str, default="experimental")
     parser.add_argument("-out", "--out_dir", type=str, default="gr_experimental")
-    parser.add_argument("-w", "--window", type=str, choices=["none", "dynamic"])
+    parser.add_argument("-w", "--window", type=str, choices=["none", "dynamic", "dynamic+"])
     parser.add_argument("-plot", "--plot", type=int, default=0)
     args = parser.parse_args()
 
@@ -179,14 +185,15 @@ def main():
     # Save results
     if args.plot == 1:
         df = get_growth_rates(save_loc, f"{args.data_dir}/{args.in_dir}")
-        df_freqdepend = df[df["Model"] != "Lotka-Volterra"][
-            ["Growth Rate Window", "Model", "Experiment", "Frequency Dependence Error"]
-        ].drop_duplicates()
 
         plot_qualitative(save_loc, df, "Game Assay")
         plot_qualitative(save_loc, df, "Replicator")
         plot_qualitative(save_loc, df, "Lotka-Volterra")
 
+        df = df[(df["Growth Rate Window"] != "Ground Truth") & (df["Model"] != "Ground Truth")]
+        df_freqdepend = df[df["Model"] != "Lotka-Volterra"][
+            ["Growth Rate Window", "Model", "Experiment", "Frequency Dependence Error"]
+        ].drop_duplicates()
         plot_errors(save_loc, df, sns.barplot, "Model", "Error", "Growth Rate Window")
         plot_errors(
             save_loc,

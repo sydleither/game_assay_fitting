@@ -1,7 +1,7 @@
 import argparse
-import string
 
 from EGT_HAL.config_utils import latin_hybercube_sample, write_spatialegt_config, write_run_scripts
+from utils import get_plate_structure
 
 
 def main():
@@ -10,7 +10,10 @@ def main():
     parser.add_argument("-dir", "--data_type", type=str, default="data/spatial_egt")
     parser.add_argument("-exp", "--experiment_name", type=str, default="raw")
     parser.add_argument(
-        "-run_cmd", "--run_command", type=str, default="java -cp build_spatialegt/:lib/* SpatialEGT.SpatialEGT"
+        "-run_cmd",
+        "--run_command",
+        type=str,
+        default="java -cp build_spatialegt/:lib/* SpatialEGT.SpatialEGT",
     )
     parser.add_argument("-seed", "--seed", type=int, default=42)
     parser.add_argument("-samples", "--num_samples", type=int, default=None)
@@ -48,9 +51,7 @@ def main():
         )
 
     # Mimic plate structure
-    seeding = [0.1, 0.3, 0.5, 0.7, 0.9]
-    colids = [2, 3, 4, 5, 6]
-    rowids = string.ascii_uppercase[1:4]
+    seeding, colids, rowids = get_plate_structure()
 
     # Create ABM configs
     run_output = []

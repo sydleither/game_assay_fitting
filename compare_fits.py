@@ -163,6 +163,9 @@ def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR, k_S, k_R):
 
 def label_qualitative_dynamics(df, keys=["Model", "Experiment"]):
     # Reduce dataframe
+    for param in get_parameter_names():
+        if param not in df:
+            df[param] = np.nan
     df_q = df[keys + get_parameter_names()].drop_duplicates()
 
     # Get game quadrant of game-theoretic models
@@ -313,6 +316,7 @@ def plot_errors(save_loc, df, sns_plot, x, y, hue):
 
 def plot_qualitative(data_dir, df):
     df = df[["Experiment", "Model", "Dynamic"]].copy().drop_duplicates()
+    df = df.sort_values(by=["Model", "Experiment"])
     models = df["Model"].unique()
     model_combos = list(combinations(models, 2))
     labels = sorted(df["Dynamic"].unique())
@@ -348,7 +352,7 @@ def plot_qualitative(data_dir, df):
             ylabel=model_combos[i][0],
             title=f"Agreement: {np.trace(confusion_matrices[i])/num_experiments:5.3f}",
         )
-    fig.colorbar(ax[1].collections[0], cax=ax[-1])
+    fig.colorbar(ax[0].collections[0], cax=ax[-1])
     ax[-1].set(ylabel="Number of Experiments")
     fig.suptitle("Qualitative Agreement between Models")
     fig.patch.set_alpha(0.0)
@@ -373,7 +377,6 @@ def main():
     mean_error.reset_index()
     mean_error = mean_error.rename({"Error": "Mean Count Error"}, axis=1)
     df = df.merge(mean_error, on=["Model", "Experiment"])
-    df["Binned Fraction Sensitive"] = df["Fraction Sensitive"].round(1)
 
     # Qualitative results
     df = label_qualitative_dynamics(df)
@@ -382,8 +385,6 @@ def main():
     # Plot generic fitting errors
     plot_errors(args.data_dir, df, sns.barplot, "Model", "Error", None)
     plot_errors_facet(args.data_dir, df, sns.barplot, "Experiment", "Error", "Experiment", "Model")
-    plot_errors(args.data_dir, df, sns.lineplot, "Binned Fraction Sensitive", "Error", "Model")
-    plot_errors(args.data_dir, df, sns.lineplot, "GrowthRate_window_start", "Error", "Model")
 
     # Plot replicator vs game assay fitting errors
     df = df[df["Model"].isin(["Game Assay", "Replicator"])]

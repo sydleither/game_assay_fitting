@@ -22,6 +22,7 @@ solver_kws = {
     "relErr": 1.0e-6,
     "suppressOutputB": False,
     "max_step": 25,
+    "dt": 0.01
 }
 optimiser_kws = {
     "method": "least_squares",
@@ -113,8 +114,8 @@ def plot_freqdepend_fit(save_loc, exp_name, model_name, models_df, cell_colors, 
         palette=cell_colors,
     )
     for i, cell_type in enumerate(cell_types):
-        x0 = "p_SR" if i == 0 else "p_SS"
-        x1 = "p_RR" if i == 0 else "p_RS"
+        x0 = "p_SR" if i == 0 else "p_RR"
+        x1 = "p_SS" if i == 0 else "p_RS"
         ax.plot(
             [0, 1],
             [df[x0].values[0], df[x1].values[0]],

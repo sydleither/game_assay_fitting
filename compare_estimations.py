@@ -7,13 +7,13 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix
 
 from compare_fits import get_fit_df, plot_errors, plot_errors_facet, label_qualitative_dynamics
-from fitting.odeModels import create_model
 from utils import get_parameter_names
 
 
 def plot_qualitative(data_dir, df):
     df = df[["Experiment", "Model", "Dynamic"]].copy().drop_duplicates()
-    models = df["Model"].unique()
+    df = df.sort_values(by=["Model", "Experiment"])
+    models = df[df["Model"] != "Ground Truth"]["Model"].unique()
     labels = sorted(df["Dynamic"].unique())
     num_experiments = len(df["Experiment"].unique())
 
@@ -62,6 +62,9 @@ def qualitative_results(save_loc, df):
 
 def quantitative_results(save_loc, df):
     # Pivot dataframe from wide to long
+    for param in get_parameter_names():
+        if param not in df:
+            df[param] = np.nan
     df = pd.melt(
         df,
         id_vars=["Model", "Experiment"],
@@ -69,6 +72,7 @@ def quantitative_results(save_loc, df):
         var_name="Parameter",
         value_name="Value",
     )
+    df = df.reset_index(drop=True)
 
     # Get absolute differences
     for param in get_parameter_names():
@@ -83,6 +87,7 @@ def quantitative_results(save_loc, df):
     plot_errors_facet(save_loc, df_diff, sns.barplot, "Model", "Difference", None, "Parameter")
     plot_errors_facet(save_loc, df, sns.barplot, "Model", "Value", None, "Parameter")
     plot_errors_facet(save_loc, df, sns.scatterplot, "Model", "Value", None, "Parameter")
+    plot_errors_facet(save_loc, df, sns.scatterplot, "Model", "Value", "Experiment", "Parameter")
 
 
 def main():
@@ -95,28 +100,9 @@ def main():
     fit_df = get_fit_df(args.data_dir)
     gt_df = pd.read_csv(f"{args.data_dir}/ground_truth.csv")
 
-    # Get parameter names for each model
-    fit_params = {}
-    for model in fit_df["Model"].unique():
-        model_name = model.lower()
-        if model == "Game Assay":
-            model_name = "replicator"
-        param_names = list(create_model(model_name).paramDic.keys())
-        param_names.remove("S0")
-        param_names.remove("R0")
-        fit_params[model] = param_names
-
-    # Extract out parameter values
-    models = []
-    for model in fit_df["Model"].unique():
-        fit_df_model = fit_df[fit_df["Model"] == model]
-        fit_df_model = fit_df_model[["Model", "Experiment"] + fit_params[model]].drop_duplicates()
-        models.append(fit_df_model)
-
     # Combine fit and ground truth dataframes
     gt_df["Model"] = "Ground Truth"
-    models.append(gt_df)
-    df = pd.concat(models)
+    df = pd.concat([fit_df, gt_df])
 
     # Save results
     quantitative_results(args.data_dir, df)

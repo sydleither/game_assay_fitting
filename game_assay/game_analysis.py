@@ -137,7 +137,7 @@ def calculate_growth_rates(
     if growth_rate_window:
         counts_df["GrowthRate_window_start"] = growth_rate_window[0]
         counts_df["GrowthRate_window_end"] = growth_rate_window[1]
-    else:
+    elif "GrowthRate_window_start" not in counts_df.columns:
         counts_df = optimize_growth_rate_window(counts_df)
 
     for plate_id, well_id, cell_type in product(

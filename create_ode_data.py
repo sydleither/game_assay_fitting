@@ -1,7 +1,6 @@
 import argparse
 from datetime import date
 import os
-import string
 
 import pandas as pd
 
@@ -9,6 +8,7 @@ from EGT_HAL.config_utils import latin_hybercube_sample
 from fitting.odeModels import create_model
 from game_assay.game_analysis import calculate_growth_rates, calculate_payoffs
 from run_game_assay import plot_counts, plot_fits, plot_freqdepend_fit
+from utils import get_plate_structure
 
 
 solver_kws = {
@@ -17,6 +17,7 @@ solver_kws = {
     "relErr": 1.0e-6,
     "suppressOutputB": False,
     "max_step": 25,
+    "dt": 0.01,
 }
 optimiser_kws = {
     "method": "least_squares",
@@ -36,7 +37,7 @@ def main():
     parser.add_argument("-seed", "--seed", type=int, default=42)
     parser.add_argument("-samples", "--num_samples", type=int, default=10)
     parser.add_argument("-lpr", "--lower_param_range", type=float, default=0.001)
-    parser.add_argument("-upr", "--upper_param_range", type=float, default=0.099)
+    parser.add_argument("-upr", "--upper_param_range", type=float, default=0.005)
     parser.add_argument("-end", "--end_time", type=int, default=80)
     args = parser.parse_args()
 
@@ -51,28 +52,24 @@ def main():
             [lpr, lpr, lpr, lpr],
             [upr, upr, upr, upr],
             [False, False, False, False],
-            rnd=3,
+            rnd=4,
             seed=args.seed,
         )
     else:
         samples = latin_hybercube_sample(
             args.num_samples,
-            ["r_S", "r_R", "a_SS", "a_SR", "a_RS", "a_RR"],
-            [lpr, lpr, -upr, -upr, -upr, -upr],
-            [upr, upr, -lpr, upr, upr, -lpr],
-            [False, False, False, False, False, False],
-            rnd=3,
+            ["r_S", "r_R", "a_SS", "a_SR", "a_RS", "a_RR", "k_S", "k_R"],
+            [lpr, lpr, -upr, -upr, -upr, -upr, 500, 500],
+            [upr, upr, -lpr, upr, upr, -lpr, 5000, 5000],
+            [False, False, False, False, False, False, True, True],
+            rnd=4,
             seed=args.seed,
         )
 
     # Mimic plate structure
     init_density = 1000
-    seeding = [0.1, 0.3, 0.5, 0.7, 0.9]
-    colids = [2, 3, 4, 5, 6]
-    rowids = string.ascii_uppercase[1:4]
-    times = [[x, x + 1, 0] for x in range(args.end_time // 4 + 1)]
-    if args.model == "lotka-volterra":
-        times = [[0.01*x[0], 0.01*x[1], x[2]] for x in times]
+    seeding, colids, rowids = get_plate_structure()
+    times = [[x, x + 4, 0] for x in range(0, args.end_time, 4)]
     today_yyyymmdd = date.today().strftime("%y%m%d")
 
     # Run and save samples
@@ -80,13 +77,20 @@ def main():
     for s, sample in enumerate(samples):
         df = []
         exp_name = f"{today_yyyymmdd}_sensitive_green_vs_resistant_pink_s{s}"
-        os.makedirs(f"{args.data_dir}/{exp_name}/images")
+        if not os.path.exists(f"{args.data_dir}/{exp_name}/images"):
+            os.makedirs(f"{args.data_dir}/{exp_name}/images")
         for plate in [1]:
             for i, fs in enumerate(seeding):
                 for row in rowids:
                     # Run ODE
                     ode_model = create_model(args.model)
                     for param_name, param_val in sample.items():
+                        if param_name in ["k_S", "k_R"]:
+                            continue
+                        if param_name == "a_SS" or param_name == "a_SR":
+                            param_val = param_val / sample["k_S"]
+                        elif param_name == "a_RS" or param_name == "a_RR":
+                            param_val = param_val / sample["k_R"]
                         ode_model.paramDic[param_name] = param_val
                     ode_model.paramDic["S0"] = fs * init_density
                     ode_model.paramDic["R0"] = (1 - fs) * init_density
@@ -94,9 +98,7 @@ def main():
                     ode_model.Simulate(treatmentScheduleList=times, **solver_kws)
                     # Format ODE results
                     model_df = ode_model.resultsDf.reset_index(drop=True)
-                    if args.model == "lotka-volterra":
-                        model_df["Time"] = 100 * model_df["Time"]
-                    model_df = model_df[model_df["Time"] % 1 == 0]
+                    model_df = model_df[model_df["Time"] % 4 == 0]
                     model_df["RowId"] = row
                     model_df["ColumnId"] = colids[i]
                     model_df["PlateId"] = plate
@@ -109,7 +111,7 @@ def main():
         df["ReplicateId"] = 0
         df["ImageId"] = 0
         df["Drug"] = f"s{s}"
-        df["Time"] = df["Time"].astype(int) * 4
+        df["Time"] = df["Time"].astype(int)
         df_count = pd.melt(
             df,
             id_vars=["Time", "WellId", "PlateId"],
@@ -129,13 +131,13 @@ def main():
         df = df.drop(["S", "R", "Frequency S", "Frequency R", "TumourSize"], axis=1)
         counts_df = df.merge(df_long, on=["Time", "WellId", "PlateId"])
         counts_df["Count"] = counts_df["Count"].astype(int)
-        counts_df["CellType"] = counts_df["CellType"].map({"S": "sensitive", "R": "resistant"})
+        counts_df["CellType"] = counts_df["CellType"].map({"S": "sensitive-green", "R": "resistant-pink"})
         counts_df.to_csv(
             f"{args.data_dir}/{exp_name}/{exp_name}_counts_df_processed.csv", index=False
         )
         # Run rest of game assay
-        sensitive_type = "sensitive"
-        resistant_type = "resistant"
+        sensitive_type = "sensitive-green"
+        resistant_type = "resistant-pink"
         cell_types = [sensitive_type, resistant_type]
         cell_colors = {sensitive_type: "#4C956C", resistant_type: "#EF7C8E"}
         growth_rate_df = calculate_growth_rates(
@@ -152,7 +154,7 @@ def main():
         plot_fits(
             save_loc, exp_name, counts_df, growth_rate_df, cell_types, cell_colors, log_space=True
         )
-        plot_freqdepend_fit(save_loc, exp_name, growth_rate_df, payoff_df, cell_colors, cell_types)
+        plot_freqdepend_fit(save_loc, exp_name, growth_rate_df, payoff_df, cell_colors, cell_types) #TODO broken
         ground_truth.append(sample | {"Experiment": exp_name})
 
     # Save ground truth csv

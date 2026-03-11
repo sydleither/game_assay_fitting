@@ -1,6 +1,4 @@
-from ast import literal_eval
-
-from game_assay.game_analysis import read_overview_xlsx
+from string import ascii_uppercase
 
 
 def get_cell_types(exp_name):
@@ -10,9 +8,11 @@ def get_cell_types(exp_name):
     return s, r
 
 
-def get_growth_rate_window(data_dir, exp_name):
-    data = read_overview_xlsx(data_dir, exp_name)
-    return literal_eval(data["Growth Rate Window"])
+def get_plate_structure():
+    seeding = [0.1, 0.3, 0.5, 0.7, 0.9]
+    colids = [2, 3, 4, 5, 6]
+    rowids = ascii_uppercase[1:4]
+    return seeding, colids, rowids
 
 
 def get_parameter_names():
