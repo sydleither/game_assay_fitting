@@ -9,7 +9,7 @@ from game_assay.game_analysis_utils import (
     estimate_growth_rate,
     load_cellprofiler_data,
     map_well_to_experimental_condition,
-    optimize_growth_rate_window,
+    optimize_growth_rate_window_per_well,
 )
 
 
@@ -73,7 +73,7 @@ def calculate_counts(data_dir, dir_curr_experiment, rewrite=False):
             ignore_column=None,
             tags=tags,
             pop_names=pop_names,
-            count_threshold=experiment["Minimum Cell Number"]
+            count_threshold=experiment["Minimum Cell Number"],
         )
         counts_df["PlateId"] = plate_id
         counts_df["ReplicateId"] = counts_df["RowId"].apply(
@@ -134,11 +134,14 @@ def calculate_growth_rates(
     tmp_list = []
 
     # Calculate growth rate window
+    counts_df.loc[counts_df["Count"] == 0, "Count"] = 1
     if growth_rate_window:
         counts_df["GrowthRate_window_start"] = growth_rate_window[0]
         counts_df["GrowthRate_window_end"] = growth_rate_window[1]
     elif "GrowthRate_window_start" not in counts_df.columns:
-        counts_df = optimize_growth_rate_window(counts_df)
+        counts_df = counts_df.groupby(["PlateId", "WellId"], group_keys=False)[
+            counts_df.columns
+        ].apply(optimize_growth_rate_window_per_well)
 
     for plate_id, well_id, cell_type in product(
         counts_df["PlateId"].unique(), counts_df["WellId"].unique(), cell_type_list
@@ -152,16 +155,6 @@ def calculate_growth_rates(
             curr_df["GrowthRate_window_start"].values[0],
             curr_df["GrowthRate_window_end"].values[0],
         )
-        # Estimate growth rate
-        if curr_df["Count"].min() <= 0:
-            slope, intercept, low_slope, high_slope, error = np.nan, np.nan, np.nan, np.nan, np.nan
-        else:
-            slope, intercept, low_slope, high_slope, error = estimate_growth_rate(
-                data_df=counts_df[counts_df["PlateId"] == plate_id],
-                well_id=well_id,
-                cell_type=cell_type,
-                growth_rate_window=growth_rate_window,
-            )
         # Add initial frequency of cell types
         initial_freq = counts_df[
             (counts_df["Time"] == 0)
@@ -171,6 +164,19 @@ def calculate_growth_rates(
         fractions = {}
         for ct, freq in initial_freq[["CellType", "Frequency"]].values:
             fractions[f"Fraction_{ct}"] = freq
+        # Estimate growth rate
+        if (
+            curr_df["Count"].min() <= 0
+            or fractions[f"Fraction_{cell_type}"] == 0
+        ):
+            slope, intercept, low_slope, high_slope, error = np.nan, np.nan, np.nan, np.nan, np.nan
+        else:
+            slope, intercept, low_slope, high_slope, error = estimate_growth_rate(
+                data_df=counts_df[counts_df["PlateId"] == plate_id],
+                well_id=well_id,
+                cell_type=cell_type,
+                growth_rate_window=growth_rate_window,
+            )
         # Compile growth_rate_df row
         tmp_list.append(
             {
@@ -186,6 +192,7 @@ def calculate_growth_rates(
                 "GrowthRate_window_start": growth_rate_window[0],
                 "GrowthRate_window_end": growth_rate_window[1],
                 "GrowthRate_error": error,
+                "GrowthRate_BIC": curr_df["BIC"].values[0],
             }
         )
     growth_rate_df = pd.DataFrame(tmp_list)

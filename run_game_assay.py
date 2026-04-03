@@ -151,7 +151,16 @@ def plot_fits(
     plt.close()
 
 
-def plot_freqdepend_fit(save_loc, exp_name, gr_df, payoff_df, cell_colors, cell_types, dc=0.0):
+def plot_freqdepend_fit(
+    save_loc,
+    exp_name,
+    gr_df,
+    payoff_df,
+    cell_colors,
+    cell_types,
+    P=["p11", "p12", "p21", "p22"],
+    dc=0.0,
+):
     gr_df_dc = gr_df[gr_df["DrugConcentration"] == dc]
     payoff_df_dc = payoff_df[payoff_df["DrugConcentration"] == dc]
 
@@ -168,8 +177,8 @@ def plot_freqdepend_fit(save_loc, exp_name, gr_df, payoff_df, cell_colors, cell_
         palette=cell_colors,
     )
     for i, cell_type in enumerate(cell_types):
-        x0 = "p12" if i == 0 else "p22"
-        x1 = "p11" if i == 0 else "p21"
+        x0 = P[1] if i == 0 else P[3]
+        x1 = P[0] if i == 0 else P[2]
         ax.plot(
             [0, 1],
             [payoff_df_dc[x0].values[0], payoff_df_dc[x1].values[0]],

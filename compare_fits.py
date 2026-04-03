@@ -128,14 +128,9 @@ def classify_game(a, b, c, d):
     return "Unknown"
 
 
-def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR, k_S, k_R):
+def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR):
     if np.any(np.isnan([r_S, r_R, a_SS, a_SR, a_RS, a_RR])):
         return np.nan
-    if not np.any(np.isnan([k_S, k_R])):
-        a_SS = a_SS / k_S
-        a_SR = a_SR / k_S
-        a_RS = a_RS / k_R
-        a_RR = a_RR / k_R
 
     # Biologically infeasible dynamics
     species0_fp = -r_S / a_SS if a_SS != 0 else r_S
@@ -176,7 +171,7 @@ def label_qualitative_dynamics(df, keys=["Model", "Experiment"]):
     # Get fixed point dynamics of lotka-volterra models
     df_q["LV Dynamic"] = df_q.apply(
         lambda x: classify_lv_dynamic(
-            x["r_S"], x["r_R"], x["a_SS"], x["a_SR"], x["a_RS"], x["a_RR"], x["k_S"], x["k_R"]
+            x["r_S"], x["r_R"], x["a_SS"], x["a_SR"], x["a_RS"], x["a_RR"]
         ),
         axis=1,
     )
@@ -350,7 +345,7 @@ def plot_qualitative(data_dir, df):
         ax[i].set(
             xlabel=model_combos[i][1],
             ylabel=model_combos[i][0],
-            title=f"Agreement: {np.trace(confusion_matrices[i])/num_experiments:5.3f}",
+            title=f"Agreement: {np.trace(confusion_matrices[i]) / num_experiments:5.3f}",
         )
     fig.colorbar(ax[0].collections[0], cax=ax[-1])
     ax[-1].set(ylabel="Number of Experiments")

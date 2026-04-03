@@ -10,28 +10,10 @@ import seaborn as sns
 
 from fitting.fittingUtils import residual_multipleConditions
 from fitting.myUtils import ExtractTreatmentFromDf
-from fitting.odeModels import create_model
+from fitting.odeModels import create_model, get_models
 from game_assay.game_analysis import calculate_counts, calculate_growth_rates
 from game_assay.game_analysis_utils import calculate_fit_error
-from utils import get_cell_types
-
-
-solver_kws = {
-    "method": "RK45",
-    "absErr": 1.0e-6,
-    "relErr": 1.0e-6,
-    "suppressOutputB": False,
-    "max_step": 25,
-    "dt": 0.01
-}
-optimiser_kws = {
-    "method": "least_squares",
-    "xtol": 1e-8,
-    "ftol": 1e-8,
-    "max_nfev": 1000,
-    "nan_policy": "omit",
-    "verbose": 0,
-}
+from utils import get_cell_types, optimiser_kws, solver_kws
 
 
 def plot_fits(save_loc, exp_name, model_name, df, df_model, cell_colors, dc):
@@ -256,7 +238,7 @@ def fit(
     models_df = pd.concat(model_dfs)
 
     # Get frequency dependence fits
-    if model == "replicator":
+    if model == "replicator":  # TODO
         models_df["Sensitive Estimated"] = (
             (models_df["p_SS"] - models_df["p_SR"]) * models_df[f"Fraction_{sensitive}"]
         ) + models_df["p_SR"]
@@ -306,8 +288,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
     parser.add_argument("-exp", "--exp_name", type=str, default=None)
-    models = ["replicator", "lotka-volterra"]
-    parser.add_argument("-model", "--model", type=str, default="replicator", choices=models)
+    parser.add_argument("-model", "--model", type=str, choices=list(get_models()))
     args = parser.parse_args()
 
     # Fit model and save results

@@ -1,6 +1,25 @@
 from string import ascii_uppercase
 
 
+solver_kws = {
+    "method": "RK45",
+    "absErr": 1.0e-6,
+    "relErr": 1.0e-3,
+    "suppressOutputB": False,
+    "max_step": 1,
+    "dt": 0.1,
+}
+
+optimiser_kws = {
+    "method": "least_squares",
+    "xtol": 1e-8,
+    "ftol": 1e-8,
+    "max_nfev": 1000,
+    "nan_policy": "omit",
+    "verbose": 0,
+}
+
+
 def get_cell_types(exp_name):
     parts = exp_name.split("_")
     s = f"{parts[1]}-{parts[2].lower()}"
@@ -27,6 +46,4 @@ def get_parameter_names():
         "a_RR",
         "r_S",
         "r_R",
-        "k_S",
-        "k_R",
     ]

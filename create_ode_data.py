@@ -5,40 +5,24 @@ import os
 import pandas as pd
 
 from EGT_HAL.config_utils import latin_hybercube_sample
-from fitting.odeModels import create_model
+from fitting.odeModels import create_model, get_models
 from game_assay.game_analysis import calculate_growth_rates, calculate_payoffs
 from run_game_assay import plot_counts, plot_fits, plot_freqdepend_fit
-from utils import get_plate_structure
-
-
-solver_kws = {
-    "method": "RK45",
-    "absErr": 1.0e-6,
-    "relErr": 1.0e-6,
-    "suppressOutputB": False,
-    "max_step": 25,
-    "dt": 0.01,
-}
-optimiser_kws = {
-    "method": "least_squares",
-    "xtol": 1e-8,
-    "ftol": 1e-8,
-    "max_nfev": 1000,
-    "nan_policy": "omit",
-    "verbose": 0,
-}
+from utils import get_plate_structure, solver_kws
 
 
 def main():
     # Get parameters
     parser = argparse.ArgumentParser()
     parser.add_argument("-dir", "--data_dir", type=str)
-    parser.add_argument("-model", "--model", type=str, choices=["replicator", "lotka-volterra"])
+    parser.add_argument("-model", "--model", type=str, choices=list(get_models()))
     parser.add_argument("-seed", "--seed", type=int, default=42)
     parser.add_argument("-samples", "--num_samples", type=int, default=10)
-    parser.add_argument("-lpr", "--lower_param_range", type=float, default=0.001)
-    parser.add_argument("-upr", "--upper_param_range", type=float, default=0.005)
+    parser.add_argument("-noise", "--noise", type=int, choices=[0, 1], default=0)
+    parser.add_argument("-lpr", "--lower_param_range", type=float, default=0.0)
+    parser.add_argument("-upr", "--upper_param_range", type=float, default=0.05)
     parser.add_argument("-end", "--end_time", type=int, default=80)
+    parser.add_argument("-density", "--init_density", type=int, default=1000)
     args = parser.parse_args()
 
     lpr = args.lower_param_range
@@ -58,16 +42,15 @@ def main():
     else:
         samples = latin_hybercube_sample(
             args.num_samples,
-            ["r_S", "r_R", "a_SS", "a_SR", "a_RS", "a_RR", "k_S", "k_R"],
-            [lpr, lpr, -upr, -upr, -upr, -upr, 500, 500],
-            [upr, upr, -lpr, upr, upr, -lpr, 5000, 5000],
-            [False, False, False, False, False, False, True, True],
-            rnd=4,
+            ["r_S", "r_R", "a_SS", "a_SR", "a_RS", "a_RR"],
+            [0.0, 0.0, -0.0001, -0.0001, -0.0001, -0.0001],
+            [0.2, 0.2, 0.0, 0.0001, 0.0001, 0.0],
+            [False, False, False, False, False, False],
+            rnd=6,
             seed=args.seed,
         )
 
     # Mimic plate structure
-    init_density = 1000
     seeding, colids, rowids = get_plate_structure()
     times = [[x, x + 4, 0] for x in range(0, args.end_time, 4)]
     today_yyyymmdd = date.today().strftime("%y%m%d")
@@ -85,20 +68,18 @@ def main():
                     # Run ODE
                     ode_model = create_model(args.model)
                     for param_name, param_val in sample.items():
-                        if param_name in ["k_S", "k_R"]:
-                            continue
-                        if param_name == "a_SS" or param_name == "a_SR":
-                            param_val = param_val / sample["k_S"]
-                        elif param_name == "a_RS" or param_name == "a_RR":
-                            param_val = param_val / sample["k_R"]
                         ode_model.paramDic[param_name] = param_val
-                    ode_model.paramDic["S0"] = fs * init_density
-                    ode_model.paramDic["R0"] = (1 - fs) * init_density
+                    ode_model.paramDic["S0"] = fs * args.init_density
+                    ode_model.paramDic["R0"] = (1 - fs) * args.init_density
                     ode_model.SetParams(**ode_model.paramDic)
                     ode_model.Simulate(treatmentScheduleList=times, **solver_kws)
-                    # Format ODE results
                     model_df = ode_model.resultsDf.reset_index(drop=True)
                     model_df = model_df[model_df["Time"] % 4 == 0]
+                    # Add noise to results, if specified
+                    if args.noise == 1:
+                        print(model_df) #TODO mod both freq and count column the same
+                        exit()
+                    # Format ODE results
                     model_df["RowId"] = row
                     model_df["ColumnId"] = colids[i]
                     model_df["PlateId"] = plate
@@ -131,7 +112,9 @@ def main():
         df = df.drop(["S", "R", "Frequency S", "Frequency R", "TumourSize"], axis=1)
         counts_df = df.merge(df_long, on=["Time", "WellId", "PlateId"])
         counts_df["Count"] = counts_df["Count"].astype(int)
-        counts_df["CellType"] = counts_df["CellType"].map({"S": "sensitive-green", "R": "resistant-pink"})
+        counts_df["CellType"] = counts_df["CellType"].map(
+            {"S": "sensitive-green", "R": "resistant-pink"}
+        )
         counts_df.to_csv(
             f"{args.data_dir}/{exp_name}/{exp_name}_counts_df_processed.csv", index=False
         )
@@ -154,7 +137,14 @@ def main():
         plot_fits(
             save_loc, exp_name, counts_df, growth_rate_df, cell_types, cell_colors, log_space=True
         )
-        plot_freqdepend_fit(save_loc, exp_name, growth_rate_df, payoff_df, cell_colors, cell_types) #TODO broken
+        plot_freqdepend_fit(
+            save_loc,
+            exp_name,
+            growth_rate_df,
+            payoff_df,
+            cell_colors,
+            cell_types,
+        )
         ground_truth.append(sample | {"Experiment": exp_name})
 
     # Save ground truth csv

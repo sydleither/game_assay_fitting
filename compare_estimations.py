@@ -6,7 +6,7 @@ import pandas as pd
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
 
-from compare_fits import get_fit_df, plot_errors, plot_errors_facet, label_qualitative_dynamics
+from compare_fits import get_fit_df, plot_errors_facet, label_qualitative_dynamics
 from utils import get_parameter_names
 
 
@@ -43,9 +43,9 @@ def plot_qualitative(data_dir, df):
             ax=ax[i],
         )
         ax[i].set(
-            xlabel="Ground Truth",
-            ylabel=models[i],
-            title=f"Accuracy: {np.trace(confusion_matrices[i])/num_experiments:5.3f}",
+            xlabel=models[i],
+            ylabel="Ground Truth",
+            title=f"Accuracy: {np.trace(confusion_matrices[i]) / num_experiments:5.3f}",
         )
     fig.colorbar(ax[1].collections[0], cax=ax[-1])
     ax[-1].set(ylabel="Number of Experiments")
@@ -93,7 +93,7 @@ def quantitative_results(save_loc, df):
 def main():
     # Read in arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("-dir", "--data_dir", type=str, default="data/spatial_egt/formatted")
+    parser.add_argument("-dir", "--data_dir", type=str, default="data/abm/formatted")
     args = parser.parse_args()
 
     # Get fits and ground truth

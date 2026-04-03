@@ -6,16 +6,12 @@ import pandas as pd
 import seaborn as sns
 from sklearn.metrics import accuracy_score
 
-from compare_fits import get_fit_df, label_qualitative_dynamics, plot_errors
+from compare_fits import get_fit_df, label_qualitative_dynamics, plot_errors, plot_errors_facet
 from fit_ode import fit
-from game_assay.game_analysis import (
-    calculate_counts,
-    calculate_growth_rates,
-    calculate_payoffs,
-)
-from game_assay.game_analysis_utils import optimize_growth_rate_window2
-from run_game_assay import plot_fits
-from utils import get_cell_types
+from game_assay.game_analysis import calculate_counts, calculate_growth_rates, calculate_payoffs
+from game_assay.game_analysis_utils import optimize_growth_rate_window
+from run_game_assay import plot_fits, plot_freqdepend_fit
+from utils import get_cell_types, get_parameter_names
 
 
 def plot_qualitative(data_dir, df, model):
@@ -58,7 +54,7 @@ def plot_qualitative(data_dir, df, model):
     )
 
     fig, ax = plt.subplots(figsize=(6, 6))
-    sns.heatmap(df_agr, annot=True, ax=ax)
+    sns.heatmap(df_agr, annot=True, vmin=0, vmax=1, ax=ax)
     ax.set_title(f"Agreement Between Growth Rate Windows for {model}")
     fig.patch.set_alpha(0.0)
     fig.tight_layout()
@@ -96,7 +92,7 @@ def get_growth_rates(data_dir, in_dir):
 
     # Normalize error by growth rate window size
     df["Window Size"] = (df["GrowthRate_window_end"] - df["GrowthRate_window_start"]) / 4
-    df["Error"] = df["Error"] / df["Window Size"]
+    # df["Error"] = df["Error"] / df["Window Size"]
 
     # Final formatting and return
     df = get_ground_truth(in_dir, df)
@@ -116,8 +112,8 @@ def save_growth_rate(in_data_dir, out_data_dir, exp_name, window):
     gr_window = None
     if window == "none":
         gr_window = (counts_df["Time"].min(), counts_df["Time"].max())
-    elif window == "dynamic+":
-        counts_df = optimize_growth_rate_window2(counts_df)
+    elif window == "per_exp":
+        counts_df = optimize_growth_rate_window(counts_df)
 
     growth_rate_df = calculate_growth_rates(
         f"{out_data_dir}/{window}",
@@ -129,22 +125,31 @@ def save_growth_rate(in_data_dir, out_data_dir, exp_name, window):
     cell_colors = {sensitive_type: "#4C956C", resistant_type: "#EF7C8E"}
     plot_fits(save_loc, exp_name, counts_df, growth_rate_df, cell_types, cell_colors)
 
-    calculate_payoffs(
+    payoff_df = calculate_payoffs(
         f"{out_data_dir}/{window}",
         exp_name,
         growth_rate_df,
         cell_types,
         f"Fraction_{sensitive_type}",
     )
+    plot_freqdepend_fit(save_loc, exp_name, growth_rate_df, payoff_df, cell_colors, cell_types)
+
     fit(
         f"{out_data_dir}/{window}",
         exp_name,
         "replicator",
         counts_df,
         growth_rate_df,
-        save_figs=False,
+        save_figs=True,
     )
-    fit(f"{out_data_dir}/{window}", exp_name, "lotka-volterra", counts_df, growth_rate_df, save_figs=False)
+    fit(
+        f"{out_data_dir}/{window}",
+        exp_name,
+        "lotka-volterra",
+        counts_df,
+        growth_rate_df,
+        save_figs=True,
+    )
 
 
 def main():
@@ -153,7 +158,7 @@ def main():
     parser.add_argument("-dir", "--data_dir", type=str, default="data")
     parser.add_argument("-in", "--in_dir", type=str, default="experimental")
     parser.add_argument("-out", "--out_dir", type=str, default="gr_experimental")
-    parser.add_argument("-w", "--window", type=str, choices=["none", "dynamic", "dynamic+"])
+    parser.add_argument("-w", "--window", type=str, choices=["none", "per_exp", "per_well"])
     parser.add_argument("-plot", "--plot", type=int, default=0)
     args = parser.parse_args()
 
@@ -185,6 +190,20 @@ def main():
     # Save results
     if args.plot == 1:
         df = get_growth_rates(save_loc, f"{args.data_dir}/{args.in_dir}")
+        df.loc[df["Error"] > 0.1, "Error"] = 0.1 #TODO remove
+
+        if "Ground Truth" not in df["Model"].unique():
+            gt = []
+            for exp in df["Experiment"].unique():
+                gt.append(
+                    {
+                        "Experiment": exp,
+                        "Model": "Ground Truth",
+                        "Growth Rate Window": "Ground Truth",
+                        "Dynamic": "Sensitive Wins",
+                    }
+                )
+            df = pd.concat([df, pd.DataFrame(gt)])
 
         plot_qualitative(save_loc, df, "Game Assay")
         plot_qualitative(save_loc, df, "Replicator")
@@ -221,6 +240,16 @@ def main():
             "Frequency Dependence Error",
             None,
         )
+
+        df = pd.melt(
+            df,
+            id_vars=["Model", "Experiment"],
+            value_vars=get_parameter_names(),
+            var_name="Parameter",
+            value_name="Value",
+        )
+        df = df.reset_index(drop=True)
+        plot_errors_facet(save_loc, df, sns.scatterplot, "Model", "Value", None, "Parameter")
 
 
 if __name__ == "__main__":

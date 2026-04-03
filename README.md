@@ -42,7 +42,7 @@ With the post-cellprofiler data, replicate this file structure:
 ```
 
 ## Run game assay, ODE models, and plot fits
-### On EGT ODE data
+### On frequency-dependent ODE data
 ```
 python3 create_ode_data.py -dir data/ode_egt -model replicator
 python3 fit_ode.py -dir data/ode_egt -model replicator
@@ -50,7 +50,7 @@ python3 fit_ode.py -dir data/ode_egt -model "lotka-volterra"
 python3 compare_fits.py -dir data/ode_egt
 python3 compare_estimations.py -dir data/ode_egt
 ```
-### On LV ODE data
+### On density-dependent ODE data
 ```
 python3 create_ode_data.py -dir data/ode_lv -model "lotka-volterra"
 python3 fit_ode.py -dir data/ode_lv -model replicator
@@ -58,24 +58,16 @@ python3 fit_ode.py -dir data/ode_lv -model "lotka-volterra"
 python3 compare_fits.py -dir data/ode_lv
 python3 compare_estimations.py -dir data/ode_lv
 ```
-### On EGT ABM data
+### On spatial density-dependent data
 ```
-python3 create_spatialegt_data.py -dir data/spatial_egt -samples 10
-python3 format_abm_data.py -dir data/spatial_egt
-python3 run_game_assay.py -dir data/spatial_egt/formatted
-python3 fit_ode.py -dir data/spatial_egt/formatted -model replicator
-python3 fit_ode.py -dir data/spatial_egt/formatted -model "lotka-volterra"
-python3 compare_fits.py -dir data/spatial_egt/formatted
-python3 compare_estimations.py -dir data/spatial_egt/formatted
-```
-### On LV ABM data
-```
-python3 create_spatiallv_data.py -dir data/spatial_lv -samples 10
-python3 format_abm_data.py -dir data/spatial_lv
-python3 run_game_assay.py -dir data/spatial_lv/formatted
-python3 fit_ode.py -dir data/spatial_lv/formatted -model replicator
-python3 fit_ode.py -dir data/spatial_lv/formatted -model "lotka-volterra"
-python3 compare_fits.py -dir data/spatial_lv/formatted
+python3 create_abm_data.py -dir data/abm -samples 10
+bash data/abm/raw/run0.sh
+python3 format_abm_data.py -dir data/abm
+bash data/abm/game_assay.sh
+bash data/abm/ode_freq.sh
+bash data/abm/ode_density.sh
+python3 compare_fits.py -dir data/abm/formatted
+python3 compare_estimations.py -dir data/abm/formatted
 ```
 ### On experimental data
 ```

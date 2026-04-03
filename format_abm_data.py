@@ -6,28 +6,12 @@ import os
 import pandas as pd
 
 
-def abm_parameter_map():
-    return {
-        "A": "p_SS",
-        "B": "p_SR",
-        "C": "p_RS",
-        "D": "p_RR",
-        "A_00": "a_SS",
-        "A_01": "a_SR",
-        "A_10": "a_RS",
-        "A_11": "a_RR",
-        "r_0": "r_S",
-        "r_1": "r_R",
-        "k_0": "k_S",
-        "k_1": "k_R",
-    }
-
-
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-dir", "--data_type", type=str, default="data/spatial_egt")
+    parser.add_argument("-dir", "--data_type", type=str, default="data/abm")
     parser.add_argument("-in", "--in_dir", type=str, default="raw")
     parser.add_argument("-out", "--out_dir", type=str, default="formatted")
+    parser.add_argument("-run", "--run_cmd", type=str, default="python3")
     args = parser.parse_args()
 
     data_dir = args.data_type
@@ -52,21 +36,19 @@ def main():
             continue
         exp_new = f"{today_yyyymmdd}_sensitive_green_vs_resistant_pink_s{exp}"
         plates = 0
-        os.mkdir(f"{data_dir}/{out_dir}/{exp_new}")
         for plate in os.listdir(f"{data_dir}/{raw_dir}/{exp}"):
             plates += 1
             out_loc = f"{data_dir}/{out_dir}/{exp_new}/results_stitched_images_plate{plate}"
-            os.mkdir(out_loc)
+            os.makedirs(out_loc)
             for well in os.listdir(f"{data_dir}/{raw_dir}/{exp}/{plate}"):
-                # Assume only 1 rep
-                for rep in os.listdir(f"{data_dir}/{raw_dir}/{exp}/{plate}/{well}"):
-                    rep_path = f"{data_dir}/{raw_dir}/{exp}/{plate}/{well}/{rep}"
-                    if os.path.isfile(rep_path):
-                        continue
-                    df = pd.read_csv(f"{rep_path}/2Dcoords.csv")
                 out_name = f"segmentation_results_well_{well}"
+                # Read in coordinates
+                df = pd.read_csv(
+                    f"{data_dir}/{raw_dir}/{exp}/{plate}/{well}/coords.csv",
+                    usecols=[0, 1, 2, 3, 4],
+                )
                 # Save ground truth data
-                config = json.load(open(f"{data_dir}/{raw_dir}/{exp}/{plate}/{well}/{well}.json"))
+                config = json.load(open(f"{data_dir}/{raw_dir}/{exp}/{plate}/{well}/config.json"))
                 config["WellId"] = well
                 config["PlateId"] = plate
                 config["Experiment"] = exp_new
@@ -125,21 +107,42 @@ def main():
                 "Copied?": "y",
                 "Tags": ["green", "pink"],
                 "Growth Rate Window": [24, 72],
-                "Minimum Cell Number": 10,
+                "Minimum Cell Number": 5,
                 "Notes": "",
             }
         )
 
     # Save ground truth
     gt_df = pd.DataFrame(ground_truth)
-    gt_df = gt_df.rename(columns=abm_parameter_map())
-    params = [x for x in list(abm_parameter_map().values()) if x in gt_df.columns]
-    gt_df = gt_df[["Experiment"]+params].drop_duplicates()
+    params = [x for x in gt_df.columns if "A_" in x or "r_" in x]
+    gt_df = gt_df[["Experiment"] + params].drop_duplicates()
+    gt_df = gt_df.rename(
+        {
+            "A_00": "a_SS",
+            "A_01": "a_SR",
+            "A_10": "a_RS",
+            "A_11": "a_RR",
+            "r_0": "r_S",
+            "r_1": "r_R",
+        },
+        axis=1,
+    )
     gt_df.to_csv(f"{data_dir}/{out_dir}/ground_truth.csv", index=False)
     # Save overview.xlsx
     overview_df = pd.DataFrame(overview)
-    overview_df["Date"] = pd.to_datetime(overview_df["Date"])
+    overview_df["Date"] = pd.to_datetime(overview_df["Date"], format="%m/%d/%y")
     overview_df.to_excel(f"{data_dir}/{out_dir}/overview.xlsx", index=False)
+    # Save sbatch run scripts
+    out = f"{data_dir}/{out_dir}"
+    with open(f"{data_dir}/game_assay.sh", "w") as f:
+        for exp_name in gt_df["Experiment"].unique():
+            f.write(f"{args.run_cmd} run_game_assay.py -dir {out} -exp {exp_name}\n")
+    with open(f"{data_dir}/ode_freq.sh", "w") as f:
+        for exp_name in gt_df["Experiment"].unique():
+            f.write(f"{args.run_cmd} fit_ode.py -dir {out} -exp {exp_name} -model replicator\n")
+    with open(f"{data_dir}/ode_density.sh", "w") as f:
+        for exp_name in gt_df["Experiment"].unique():
+            f.write(f"{args.run_cmd} fit_ode.py -dir {out} -exp {exp_name} -model \"lotka-volterra\"\n")
 
 
 if __name__ == "__main__":

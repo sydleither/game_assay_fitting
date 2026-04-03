@@ -477,90 +477,222 @@ def calculate_fit_error(Y, Y_pred):
     return np.sqrt(np.mean((Y - Y_pred) ** 2)) / np.mean(Y)
 
 
-def growth_rate_window_loss(X, Y):
-    slope, intercept, _, _ = stats.theilslopes(Y, X)
-    Y_pred = slope * X + intercept
-    return calculate_fit_error(np.exp(Y), np.exp(Y_pred))
-
-
-def optimize_growth_rate_window(df, subset_length=10):
+def optimize_growth_rate_window(df):
     """Input: counts dataframe for a given experiment."""
-    cell_types = df["CellType"].unique()
-    times = (
-        df.groupby("Time")[["PlateId", "WellId", "CellType"]]
-        .nunique()
-        .eq(df[["PlateId", "WellId", "CellType"]].nunique())
-        .index.tolist()
+    df.loc[df["Count"] == 0, "Count"] = 1
+    fits = []
+    for plate in df["PlateId"].unique():
+        df_plate = df[df["PlateId"] == plate]
+        for well in df_plate["WellId"].unique():
+            df_well = df_plate[df_plate["WellId"] == well]
+            _, fit = optimize_growth_rate_window_per_well(
+                df_well, return_fit_df=True, filter_by_dominant_sign=False
+            )
+            fits.append(fit)
+    fits = pd.concat(fits, ignore_index=True)
+    fits = (
+        fits[["Window_Start", "Window_End", "BIC"]]
+        .groupby(["Window_Start", "Window_End"])
+        .mean()
+        .reset_index()
     )
-    times = np.array(sorted(times))
-    pts = len(times)
-    losses = {}
-    for start in range(pts - subset_length):
-        end = start + subset_length
-        X_subset = times[start:end]
-        gr_window = (X_subset[0], X_subset[-1])
-        losses[gr_window] = []
-        for plate in df["PlateId"].unique():
-            df_plate = df[df["PlateId"] == plate]
-            for well in df_plate["WellId"].unique():
-                df_well = df_plate[df_plate["WellId"] == well]
-                # Check if well should be skipped
-                skip = False
-                for cell_type in cell_types:
-                    df_ct = df_well[df_well["CellType"] == cell_type]
-                    Y_subset = df_ct["Count"].values[start:end]
-                    if stats.variation(Y_subset) < 0.05:
-                        losses[gr_window].append(1)
-                        skip = True
-                    if min(Y_subset) <= 0:
-                        skip = True
-                # Calculate loss of well
-                if not skip:
-                    for cell_type in cell_types:
-                        df_ct = df_well[df_well["CellType"] == cell_type]
-                        Y_subset = np.log(df_ct["Count"].values[start:end])
-                        loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
-                        losses[gr_window].append(loss)
-        losses[gr_window] = np.mean(losses[gr_window])
-    gr_window = min(losses, key=losses.get)
-    df["GrowthRate_window_start"] = gr_window[0]
-    df["GrowthRate_window_end"] = gr_window[1]
+    best_window = fits.loc[fits["BIC"].idxmin()]
+    df["GrowthRate_window_start"] = best_window["Window_Start"]
+    df["GrowthRate_window_end"] = best_window["Window_End"]
+    df["BIC"] = best_window["BIC"]
     return df
 
 
-def optimize_growth_rate_window2(df, subset_length=10):
-    def optimize(df):
-        cell_types = df["CellType"].unique()
-        times = sorted(df["Time"].unique())
-        pts = len(df["Time"].unique())
-        loss_list = []
-        subset_list = []
-        for start in range(pts - subset_length):
-            end = start + subset_length
-            X_subset = times[start:end]
-            # Check if well should be skipped
-            skip = False
-            for cell_type in cell_types:
-                df_ct = df[df["CellType"] == cell_type]
-                Y_subset = df_ct["Count"].values[start:end]
-                if stats.variation(Y_subset) < 0.05:
-                    loss_list.append(1)
-                    skip = True
-                if min(Y_subset) <= 0:
-                    skip = True
-            # Calculate loss of well
-            if not skip:
-                avg_loss = []
-                for cell_type in cell_types:
-                    df_ct = df[df["CellType"] == cell_type]
-                    Y_subset = np.log(df_ct["Count"].values[start:end])
-                    loss = growth_rate_window_loss(X_subset - X_subset[0], Y_subset)
-                    avg_loss.append(loss)
-                loss_list.append(np.mean(avg_loss))
-            subset_list.append((X_subset[0], X_subset[-1]))
-        min_loss_indx = np.argmin(loss_list)
-        df["GrowthRate_window_start"] = subset_list[min_loss_indx][0]
-        df["GrowthRate_window_end"] = subset_list[min_loss_indx][1]
-        df["GrowthRate_fit"] = np.min(loss_list)
-        return df
-    return df.groupby(["PlateId", "WellId"], group_keys=False)[df.columns].apply(optimize)
+def calculate_growth_rate_fit_error(well_df, slope, intercept, growth_rate_window):
+    tmp_df = well_df[well_df["Time"].between(growth_rate_window[0], growth_rate_window[1])].copy()
+    X = tmp_df["Time"].values
+    Y = np.log(tmp_df["Count"].values)
+    Y_pred = slope * (X - growth_rate_window[0]) + intercept
+    return np.sum(np.square(Y - Y_pred))
+
+
+def calculate_growth_rate_fit_bic(
+    well_df, slope, intercept, growth_rate_window, sum_squared_residuals=None
+):
+    if sum_squared_residuals is None:
+        sum_squared_residuals = calculate_growth_rate_fit_error(
+            well_df, slope, intercept, growth_rate_window
+        )
+    n_data_points = well_df[
+        well_df["Time"].between(growth_rate_window[0], growth_rate_window[1])
+    ].shape[0]
+    k = 2  # Number of parameters in the model (slope and intercept)
+    bic = n_data_points * np.log(sum_squared_residuals / n_data_points) + k * np.log(n_data_points)
+    return bic
+
+
+def optimize_growth_rate_window_per_well(
+    well_df,
+    min_window_size=5,
+    max_window_size=20,
+    metric_for_selection="BIC",
+    filter_by_dominant_sign=True,
+    top_quantile_of_slopes_to_include=0.25,
+    plot_fits=False,
+    return_fit_df=False,
+):
+    """
+    This function will test different windows for growth rate estimation and select the optimal one
+    based on a specified metric (e.g. BIC). The optimization is done by exhaustively testing all
+    possible windows within a specified range of window sizes and start times. The function returns the
+    best window and a summary dataframe with the fit parameters and metrics for all tested windows.
+    The metric for selection can be specified with the metric_for_selection argument (e.g. "BIC" or "SumSquaredResiduals").
+    In addition, the function allows optional filtering of the tested windows based on the dominant sign of
+    the slope and the absolute value of the slope. The purpose is to deal with the fact that growth curves
+    can have multiple phases (e.g. growth followed by plateau) and we want to make sure that the selected window
+    is in the growth phase and not in the plateau phase. Similarly, when we drug cells, then there may
+    be a delay before the drug acts. If that's the case, then we will probably want the growth rate estimation
+    to focus on the later windows where the drug is acting. It's difficult to write a good general method
+    to fix this, but one way I found works reasonably well is to look for what is the dominant sign of the
+    slope across all windows (do we mostly see growth, or mostly decline?) and then additionally filter for
+    those windows with the highest absolute growth rate (i.e. the most extreme slopes), so to get rid of
+    windows with stagnation (either because we're on a plateau or because the window length is short).
+    Input:
+    - well_df: dataframe with columns "Time" and "Count" for a single well
+    - min_window_size: minimum window size to test (in #time points, not hours)
+    - max_window_size: maximum window size to test (in #time points, not hours)
+    - min_cell_number: minimum cell number threshold for growth rate estimation (passed to the estimate_growth_rate function)
+    - metric_for_selection: which metric to use for selecting the best window (options: "BIC" or "SumSquaredResiduals")
+    - filter_by_dominant_sign: whether to filter the windows based on the dominant sign of the slope
+    - top_quantile_of_slopes_to_include: what percentage of windows to keep based on the absolute value of the slope (e.g. if set to 0.25, we will keep the top 25% of windows with the highest absolute slope values)
+    - plot_fits: whether to plot the fits for each window choice for visual checking (this can be very useful to check if the optimization is working well, but it will generate a lot of plots, so use with caution)
+    Output:
+    - best_window: a dictionary with the parameters of the best window (e.g. "WindowLength", "StartIdx", "Window", "Slope", "Intercept", "BIC", etc.)
+    - fit_summary_df: a dataframe with the fit parameters and metrics for all tested windows, which can be used for further analysis or troubleshooting
+    """
+
+    # Sweep all possible start times and window sizes
+    tmp_list = []
+    for window_size in range(min_window_size, max_window_size + 1):
+        # Generate a list of all start points for windows to test. This will depend on the
+        # number of unique time points in the data and the window size we want to test (the
+        # longer the window, the fewer options for start points we have, because the window has
+        # to fit within the time range of the data).
+        start_points_to_test_list = np.arange(len(well_df["Time"].unique()) - window_size)
+
+        # Optional: plot the fits for each window choice to visually check if the optimization is working well
+        if plot_fits:
+            n_rows = start_points_to_test_list.shape[0] // 5 + 1
+            n_cols = 5
+            fig, ax_list = plt.subplots(n_rows, n_cols, sharex=True, sharey=True, figsize=(16, 8))
+
+        # Optimisation: Loop through all start points for this window size
+        for i, start_idx in enumerate(start_points_to_test_list):
+            curr_window = well_df["Time"].unique()[[start_idx, start_idx + window_size]]
+
+            # Estimate growth rate for this window
+            curr_slope, curr_intercept, _, _, _ = estimate_growth_rate(
+                well_df, growth_rate_window=curr_window
+            )
+
+            # Calculate the goodness of fit for this window
+            sum_squared_residuals = calculate_growth_rate_fit_error(
+                well_df, curr_slope, curr_intercept, curr_window
+            )
+            bic = calculate_growth_rate_fit_bic(
+                well_df, curr_slope, curr_intercept, curr_window, sum_squared_residuals
+            )
+            tmp_list.append(
+                {
+                    "WindowLength": window_size,
+                    "StartIdx": start_idx,
+                    "Window": curr_window,
+                    "Window_Start": curr_window[0],
+                    "Window_End": curr_window[1],
+                    "Slope": curr_slope,
+                    "Intercept": curr_intercept,
+                    "StartIdx_at_edge": i == len(start_points_to_test_list) - 1,
+                    "SumSquaredResiduals": sum_squared_residuals,
+                    "BIC": bic,
+                }
+            )
+
+            # Plot for visual checking
+            if plot_fits:
+                # fig, ax = plt.subplots(figsize=(6, 4))
+                ax = ax_list.flatten()[i]
+                sns.lineplot(
+                    x="Time",
+                    y="Count",
+                    style="CellType",
+                    color="red",
+                    markers="s",
+                    markeredgewidth=0.5,
+                    markeredgecolor="black",
+                    legend=False,
+                    data=well_df,
+                    ax=ax,
+                )
+                ax.set_yscale("log")
+
+                # Add the growth rate fit line
+                # 2. When estimating the growth rate, we are fitting an exponential curve to the data
+                # We will overlay this curve here to see if it fits well and if the window is appropriately chosen
+                x = np.arange(*curr_window, 0.1)
+                y = curr_slope * (x - curr_window[0]) + curr_intercept
+                ax.plot(x, np.exp(y), color="#09D3F2", linestyle="-", linewidth=2)
+
+                # 3. Annotate the window which is used for the growth rate calculation
+                ax.axvline(curr_window[0], color="black", linestyle="--")
+                ax.axvline(curr_window[1], color="black", linestyle="--")
+                ax.fill_betweenx(
+                    [1e2, 3e4], curr_window[0], curr_window[1], color="#F2096E", alpha=0.1
+                )
+    fit_summary_df = pd.DataFrame(tmp_list)
+
+    # Optional: Growth curves can have multiple phases. For example, a sigmoid will have a growth phase
+    # followed by a plateau. The method above will give us an estimate of the growth rate for each window
+    # we test and it is possible that the plateau phase has a better fit (e.g. lower BIC) than the growth
+    # phase. Similarly, when we drug cells, then there may be a delay before the drug acts. If that's the
+    # case, then we will probably want the growth rate estimation to focus on the later windows
+    # where the drug is acting. It's difficult to write a good general method to fix this, but one way
+    # I found works reasonably well is to look for what is the dominant sign of the slope across
+    # all windows (do we mostly see growth, or mostly decline?) and then additionally filter for those
+    # windows with the highest absolute growth rate (i.e. the most extreme slopes), so to get rid of
+    # windows with stagnation (either because we're on a plateau or because the window length is short).
+    # This is done here and can be controlled by:
+    # - filter_by_dominant_sign: whether to filter the windows based on the dominant sign of the slope
+    # - top_quantile_of_slopes_to_include: what percentage of windows to keep based on the absolute value of the slope (e.g. if set to 0.25, we will keep the top 25% of windows with the highest absolute slope values)
+    if filter_by_dominant_sign:
+        dominant_sign = np.sign(fit_summary_df["Slope"].median())
+        if dominant_sign != 0:
+            # Include top x% of windows with the dominant sign
+            fit_summary_df = fit_summary_df[fit_summary_df["Slope"] * dominant_sign > 0].copy()
+            threshold = np.quantile(
+                np.abs(fit_summary_df["Slope"]), 1 - top_quantile_of_slopes_to_include
+            )
+            fit_summary_df = fit_summary_df[np.abs(fit_summary_df["Slope"]) >= threshold].copy()
+
+    # Check that we have some valid fits (i.e. some windows where the growth rate could be estimated)
+    if fit_summary_df.shape[0] == 0:
+        print(well_df)
+        raise ValueError("No valid windows found for growth rate estimation")
+
+    # Identify the best window
+    best_window = fit_summary_df.loc[fit_summary_df[metric_for_selection].idxmin()]
+
+    # Quality control: make sure the best window is not at the very edge of the tested
+    # options (which would suggest that the optimal window may be outside of the tested range)
+    best_window_size, start_idx_at_edge = (
+        best_window["WindowLength"],
+        best_window["StartIdx_at_edge"],
+    )
+    if best_window_size == min_window_size or best_window_size == max_window_size:
+        print(
+            "Warning: Best window is at the edge of the tested window sizes. Consider increasing the range of tested window sizes."
+        )
+    if start_idx_at_edge:
+        print(
+            "Warning: Best window start index is at the edge of the tested range. You might not have run the experiment long enough to capture the optimal window."
+        )
+    well_df["GrowthRate_window_start"] = best_window["Window"][0]
+    well_df["GrowthRate_window_end"] = best_window["Window"][1]
+    well_df["BIC"] = best_window["BIC"]
+    if return_fit_df:
+        return well_df, fit_summary_df
+    return well_df
