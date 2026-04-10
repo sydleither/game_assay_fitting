@@ -131,28 +131,24 @@ def classify_game(a, b, c, d):
 def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR):
     if np.any(np.isnan([r_S, r_R, a_SS, a_SR, a_RS, a_RR])):
         return np.nan
-
-    # Biologically infeasible dynamics
-    species0_fp = -r_S / a_SS if a_SS != 0 else r_S
-    species1_fp = -r_R / a_RR if a_RR != 0 else r_R
-    if species0_fp < 0 and species1_fp < 0:
-        return "Extinction"
-    if species0_fp < 0:
-        return "Resistant Wins"
-    if species1_fp < 0:
-        return "Sensitive Wins"
-
-    # Biologically feasible dynamics
-    species0_invasion_gr = r_S + a_SR * (species1_fp)
-    species1_invasion_gr = r_R + a_RS * (species0_fp)
-    if species0_invasion_gr > 0 and species1_invasion_gr > 0:
-        return "Coexistence"
-    if species0_invasion_gr > 0 and species1_invasion_gr < 0:
-        return "Sensitive Wins"
-    if species0_invasion_gr < 0 and species1_invasion_gr > 0:
-        return "Resistant Wins"
-    if species0_invasion_gr < 0 and species1_invasion_gr < 0:
-        return "Bistability"
+    denom = a_SS * a_RR - a_SR * a_RS
+    mix = ((a_SR * r_R - a_RR * r_S) / denom, (a_RS * r_S - a_SS * r_R) / denom)
+    if mix[0] < 0 or mix[1] < 0:
+        mix_stable = np.nan
+    else:
+        mix_stable = denom > 0
+    all_0_stable = r_R - a_RS * (r_S / a_SS) < 0
+    all_1_stable = r_S - a_SR * (r_R / a_RR) < 0
+    if np.isnan(mix_stable):
+        if all_0_stable:
+            return "Sensitive Wins"
+        if all_1_stable:
+            return "Resistant Wins"
+    else:
+        if mix_stable:
+            return "Coexistence"
+        if not mix_stable:
+            return "Bistability"
     return "Unknown"
 
 
@@ -164,12 +160,12 @@ def label_qualitative_dynamics(df, keys=["Model", "Experiment"]):
     df_q = df[keys + get_parameter_names()].drop_duplicates()
 
     # Get game quadrant of game-theoretic models
-    df_q["Game Quadrant"] = df_q.apply(
+    df_q["Replicator Dynamic"] = df_q.apply(
         lambda x: classify_game(x["p_SS"], x["p_SR"], x["p_RS"], x["p_RR"]), axis=1
     )
 
     # Get fixed point dynamics of lotka-volterra models
-    df_q["LV Dynamic"] = df_q.apply(
+    df_q["Lotka-Volterra Dynamic"] = df_q.apply(
         lambda x: classify_lv_dynamic(
             x["r_S"], x["r_R"], x["a_SS"], x["a_SR"], x["a_RS"], x["a_RR"]
         ),
@@ -177,7 +173,7 @@ def label_qualitative_dynamics(df, keys=["Model", "Experiment"]):
     )
 
     # Combine LV and EGT long-term dynamics columns
-    df_q["Dynamic"] = df_q["LV Dynamic"].fillna(df_q["Game Quadrant"])
+    df_q["Dynamic"] = df_q["Lotka-Volterra Dynamic"].fillna(df_q["Replicator Dynamic"])
     df_q = df_q[keys + ["Dynamic"]]
     return df.merge(df_q, on=keys)
 

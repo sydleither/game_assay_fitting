@@ -59,7 +59,9 @@ def plot_drug_concentration(save_loc, df, cell_types):
         plt.close()
 
 
-def plot_seeded_fraction(save_loc, df, cell_types):
+def plot_seeded_fraction(save_loc, df, cell_types, dc=0.0):
+    if dc is not None:
+        df = df[df["DrugConcentration"] == dc]
     df = df[(df["Time"] == 0) & (df["CellType"] == cell_types[0])]
     for plate_id in df["PlateId"].unique():
         df_plate = df[df["PlateId"] == plate_id].reset_index()

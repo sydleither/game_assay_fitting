@@ -378,8 +378,7 @@ def estimate_growth_rate(data_df, well_id=None, cell_type=None, growth_rate_wind
     x = curr_df["Time"].values - curr_df["Time"].values[0]  # Start the time at 0
     y = np.log(curr_df["Count"].values)  # Log-transform
     slope, intercept, low_slope, high_slope = stats.theilslopes(y, x)
-    error = calculate_fit_error(np.exp(y), np.exp(slope * x + intercept))
-    return slope, intercept, low_slope, high_slope, error
+    return slope, intercept, low_slope, high_slope
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -423,7 +422,7 @@ def estimate_game_parameters(
         )
         best_fit_func = lambda x: (theil_result.slope * x) + theil_result.intercept
         Y_pred = theil_result.slope * tmp_df[fraction_col] + theil_result.intercept
-        error = calculate_fit_error(tmp_df[growth_rate_col], Y_pred)
+        error = np.sum(np.square(tmp_df[growth_rate_col] - Y_pred))
         coeffs_dict[cell_type] = [
             best_fit_func(0),
             best_fit_func(1),
@@ -471,24 +470,19 @@ def estimate_game_parameters(
 
 
 # ---------------------------------------------------------------------------------------------------------------
-def calculate_fit_error(Y, Y_pred):
-    if np.mean(Y) == 0:
-        return np.nan
-    return np.sqrt(np.mean((Y - Y_pred) ** 2)) / np.mean(Y)
-
-
-def optimize_growth_rate_window(df):
+def optimize_growth_rate_window_per_exp(df):
     """Input: counts dataframe for a given experiment."""
-    df.loc[df["Count"] == 0, "Count"] = 1
     fits = []
     for plate in df["PlateId"].unique():
         df_plate = df[df["PlateId"] == plate]
         for well in df_plate["WellId"].unique():
             df_well = df_plate[df_plate["WellId"] == well]
-            _, fit = optimize_growth_rate_window_per_well(
-                df_well, return_fit_df=True, filter_by_dominant_sign=False
-            )
-            fits.append(fit)
+            for cell_type in df_well["CellType"].unique():
+                df_ct = df_well[df_well["CellType"] == cell_type]
+                _, fit = optimize_growth_rate_window_per_cell(
+                    df_ct, return_fit_df=True, filter_by_dominant_sign=False
+                )
+                fits.append(fit)
     fits = pd.concat(fits, ignore_index=True)
     fits = (
         fits[["Window_Start", "Window_End", "BIC"]]
@@ -503,30 +497,58 @@ def optimize_growth_rate_window(df):
     return df
 
 
+def optimize_growth_rate_window_per_well(df):
+    """Input: counts dataframe for a given well."""
+    df["GrowthRate_window_start"] = np.nan
+    df["GrowthRate_window_end"] = np.nan
+    df["BIC"] = np.nan
+    for plate in df["PlateId"].unique():
+        df_plate = df[df["PlateId"] == plate]
+        for well in df_plate["WellId"].unique():
+            fits = []
+            df_well = df_plate[df_plate["WellId"] == well]
+            for cell_type in df_well["CellType"].unique():
+                df_ct = df_well[df_well["CellType"] == cell_type]
+                _, fit = optimize_growth_rate_window_per_cell(
+                    df_ct, return_fit_df=True, filter_by_dominant_sign=False
+                )
+                fits.append(fit)
+            fit_df = pd.concat(fits, ignore_index=True)
+            fit_df = (
+                fit_df[["Window_Start", "Window_End", "BIC", "SumSquaredResiduals"]]
+                .groupby(["Window_Start", "Window_End"])
+                .mean()
+                .reset_index()
+            )
+            best_window = fit_df.loc[fit_df["BIC"].idxmin()]
+            df.loc[(df["PlateId"] == plate) & (df["WellId"] == well), "GrowthRate_window_start"] = (
+                best_window["Window_Start"]
+            )
+            df.loc[(df["PlateId"] == plate) & (df["WellId"] == well), "GrowthRate_window_end"] = (
+                best_window["Window_End"]
+            )
+            df.loc[(df["PlateId"] == plate) & (df["WellId"] == well), "BIC"] = best_window["BIC"]
+            df.loc[(df["PlateId"] == plate) & (df["WellId"] == well), "Error"] = best_window[
+                "SumSquaredResiduals"
+            ]
+    return df
+
+
 def calculate_growth_rate_fit_error(well_df, slope, intercept, growth_rate_window):
     tmp_df = well_df[well_df["Time"].between(growth_rate_window[0], growth_rate_window[1])].copy()
     X = tmp_df["Time"].values
-    Y = np.log(tmp_df["Count"].values)
+    Y = tmp_df["Count"].values
     Y_pred = slope * (X - growth_rate_window[0]) + intercept
-    return np.sum(np.square(Y - Y_pred))
+    return np.sum(np.square(Y - np.exp(Y_pred)))
 
 
-def calculate_growth_rate_fit_bic(
-    well_df, slope, intercept, growth_rate_window, sum_squared_residuals=None
-):
-    if sum_squared_residuals is None:
-        sum_squared_residuals = calculate_growth_rate_fit_error(
-            well_df, slope, intercept, growth_rate_window
-        )
-    n_data_points = well_df[
-        well_df["Time"].between(growth_rate_window[0], growth_rate_window[1])
-    ].shape[0]
-    k = 2  # Number of parameters in the model (slope and intercept)
+def calculate_bic(well_df, sum_squared_residuals, k=2):
+    n_data_points = well_df.shape[0]
     bic = n_data_points * np.log(sum_squared_residuals / n_data_points) + k * np.log(n_data_points)
     return bic
 
 
-def optimize_growth_rate_window_per_well(
+def optimize_growth_rate_window_per_cell(
     well_df,
     min_window_size=5,
     max_window_size=20,
@@ -535,6 +557,7 @@ def optimize_growth_rate_window_per_well(
     top_quantile_of_slopes_to_include=0.25,
     plot_fits=False,
     return_fit_df=False,
+    verbose=False
 ):
     """
     This function will test different windows for growth rate estimation and select the optimal one
@@ -565,6 +588,14 @@ def optimize_growth_rate_window_per_well(
     - best_window: a dictionary with the parameters of the best window (e.g. "WindowLength", "StartIdx", "Window", "Slope", "Intercept", "BIC", etc.)
     - fit_summary_df: a dataframe with the fit parameters and metrics for all tested windows, which can be used for further analysis or troubleshooting
     """
+    if well_df["Count"].var() == 0:
+        well_df["GrowthRate_window_start"] = well_df["Time"].min()
+        well_df["GrowthRate_window_end"] = well_df["Time"].max()
+        well_df["BIC"] = np.nan
+        well_df["SumSquaredResiduals"] = np.nan
+        if return_fit_df:
+            return well_df, pd.DataFrame()
+        return well_df
 
     # Sweep all possible start times and window sizes
     tmp_list = []
@@ -586,7 +617,7 @@ def optimize_growth_rate_window_per_well(
             curr_window = well_df["Time"].unique()[[start_idx, start_idx + window_size]]
 
             # Estimate growth rate for this window
-            curr_slope, curr_intercept, _, _, _ = estimate_growth_rate(
+            curr_slope, curr_intercept, _, _ = estimate_growth_rate(
                 well_df, growth_rate_window=curr_window
             )
 
@@ -594,8 +625,8 @@ def optimize_growth_rate_window_per_well(
             sum_squared_residuals = calculate_growth_rate_fit_error(
                 well_df, curr_slope, curr_intercept, curr_window
             )
-            bic = calculate_growth_rate_fit_bic(
-                well_df, curr_slope, curr_intercept, curr_window, sum_squared_residuals
+            bic = calculate_bic(
+                well_df["Time"].between(curr_window[0], curr_window[1]), sum_squared_residuals
             )
             tmp_list.append(
                 {
@@ -682,17 +713,19 @@ def optimize_growth_rate_window_per_well(
         best_window["WindowLength"],
         best_window["StartIdx_at_edge"],
     )
-    if best_window_size == min_window_size or best_window_size == max_window_size:
-        print(
-            "Warning: Best window is at the edge of the tested window sizes. Consider increasing the range of tested window sizes."
-        )
-    if start_idx_at_edge:
-        print(
-            "Warning: Best window start index is at the edge of the tested range. You might not have run the experiment long enough to capture the optimal window."
-        )
+    if verbose:
+        if best_window_size == min_window_size or best_window_size == max_window_size:
+            print(
+                "Warning: Best window is at the edge of the tested window sizes. Consider increasing the range of tested window sizes."
+            )
+        if start_idx_at_edge:
+            print(
+                "Warning: Best window start index is at the edge of the tested range. You might not have run the experiment long enough to capture the optimal window."
+            )
     well_df["GrowthRate_window_start"] = best_window["Window"][0]
     well_df["GrowthRate_window_end"] = best_window["Window"][1]
     well_df["BIC"] = best_window["BIC"]
+    well_df["Error"] = best_window["SumSquaredResiduals"]
     if return_fit_df:
         return well_df, fit_summary_df
     return well_df

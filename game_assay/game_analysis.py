@@ -134,14 +134,11 @@ def calculate_growth_rates(
     tmp_list = []
 
     # Calculate growth rate window
-    counts_df.loc[counts_df["Count"] == 0, "Count"] = 1
     if growth_rate_window:
         counts_df["GrowthRate_window_start"] = growth_rate_window[0]
         counts_df["GrowthRate_window_end"] = growth_rate_window[1]
     elif "GrowthRate_window_start" not in counts_df.columns:
-        counts_df = counts_df.groupby(["PlateId", "WellId"], group_keys=False)[
-            counts_df.columns
-        ].apply(optimize_growth_rate_window_per_well)
+        counts_df = optimize_growth_rate_window_per_well(counts_df)
 
     for plate_id, well_id, cell_type in product(
         counts_df["PlateId"].unique(), counts_df["WellId"].unique(), cell_type_list
@@ -165,13 +162,10 @@ def calculate_growth_rates(
         for ct, freq in initial_freq[["CellType", "Frequency"]].values:
             fractions[f"Fraction_{ct}"] = freq
         # Estimate growth rate
-        if (
-            curr_df["Count"].min() <= 0
-            or fractions[f"Fraction_{cell_type}"] == 0
-        ):
-            slope, intercept, low_slope, high_slope, error = np.nan, np.nan, np.nan, np.nan, np.nan
+        if curr_df["Count"].min() <= 0 or fractions[f"Fraction_{cell_type}"] == 0:
+            slope, intercept, low_slope, high_slope = np.nan, np.nan, np.nan, np.nan
         else:
-            slope, intercept, low_slope, high_slope, error = estimate_growth_rate(
+            slope, intercept, low_slope, high_slope = estimate_growth_rate(
                 data_df=counts_df[counts_df["PlateId"] == plate_id],
                 well_id=well_id,
                 cell_type=cell_type,
@@ -191,7 +185,7 @@ def calculate_growth_rates(
                 "Intercept": intercept,
                 "GrowthRate_window_start": growth_rate_window[0],
                 "GrowthRate_window_end": growth_rate_window[1],
-                "GrowthRate_error": error,
+                "GrowthRate_error": curr_df["Error"].values[0],
                 "GrowthRate_BIC": curr_df["BIC"].values[0],
             }
         )

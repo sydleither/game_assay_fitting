@@ -9,12 +9,15 @@ from sklearn.metrics import accuracy_score
 from compare_fits import get_fit_df, label_qualitative_dynamics, plot_errors, plot_errors_facet
 from fit_ode import fit
 from game_assay.game_analysis import calculate_counts, calculate_growth_rates, calculate_payoffs
-from game_assay.game_analysis_utils import optimize_growth_rate_window
+from game_assay.game_analysis_utils import (
+    optimize_growth_rate_window_per_exp,
+    optimize_growth_rate_window_per_well,
+)
 from run_game_assay import plot_fits, plot_freqdepend_fit
 from utils import get_cell_types, get_parameter_names
 
 
-def plot_qualitative(data_dir, df, model):
+def plot_qualitative(data_dir, df, model):  # TODO merge with compare_estimations plot_qualitative
     df_model = df[(df["Model"] == model) | (df["Model"] == "Ground Truth")]
     df_q = df_model[["Growth Rate Window", "Experiment", "Dynamic"]].drop_duplicates()
     df_q = df_q.sort_values(by=["Growth Rate Window", "Experiment"])
@@ -90,10 +93,6 @@ def get_growth_rates(data_dir, in_dir):
         df.append(df_window)
     df = pd.concat(df)
 
-    # Normalize error by growth rate window size
-    df["Window Size"] = (df["GrowthRate_window_end"] - df["GrowthRate_window_start"]) / 4
-    # df["Error"] = df["Error"] / df["Window Size"]
-
     # Final formatting and return
     df = get_ground_truth(in_dir, df)
     df = label_qualitative_dynamics(df, ["Growth Rate Window", "Model", "Experiment"])
@@ -101,7 +100,7 @@ def get_growth_rates(data_dir, in_dir):
 
 
 def save_growth_rate(in_data_dir, out_data_dir, exp_name, window):
-    save_loc = f"{out_data_dir}/{window}/{exp_name}"
+    save_loc = f"{out_data_dir}/{window}/{exp_name}/images"
     if not os.path.exists(save_loc):
         os.makedirs(save_loc)
 
@@ -113,7 +112,7 @@ def save_growth_rate(in_data_dir, out_data_dir, exp_name, window):
     if window == "none":
         gr_window = (counts_df["Time"].min(), counts_df["Time"].max())
     elif window == "per_exp":
-        counts_df = optimize_growth_rate_window(counts_df)
+        counts_df = optimize_growth_rate_window_per_exp(counts_df)
 
     growth_rate_df = calculate_growth_rates(
         f"{out_data_dir}/{window}",
@@ -190,57 +189,17 @@ def main():
     # Save results
     if args.plot == 1:
         df = get_growth_rates(save_loc, f"{args.data_dir}/{args.in_dir}")
-        df.loc[df["Error"] > 0.1, "Error"] = 0.1 #TODO remove
-
-        if "Ground Truth" not in df["Model"].unique():
-            gt = []
-            for exp in df["Experiment"].unique():
-                gt.append(
-                    {
-                        "Experiment": exp,
-                        "Model": "Ground Truth",
-                        "Growth Rate Window": "Ground Truth",
-                        "Dynamic": "Sensitive Wins",
-                    }
-                )
-            df = pd.concat([df, pd.DataFrame(gt)])
 
         plot_qualitative(save_loc, df, "Game Assay")
         plot_qualitative(save_loc, df, "Replicator")
         plot_qualitative(save_loc, df, "Lotka-Volterra")
 
         df = df[(df["Growth Rate Window"] != "Ground Truth") & (df["Model"] != "Ground Truth")]
-        df_freqdepend = df[df["Model"] != "Lotka-Volterra"][
-            ["Growth Rate Window", "Model", "Experiment", "Frequency Dependence Error"]
-        ].drop_duplicates()
         plot_errors(save_loc, df, sns.barplot, "Model", "Error", "Growth Rate Window")
-        plot_errors(
-            save_loc,
-            df_freqdepend,
-            sns.barplot,
-            "Model",
-            "Frequency Dependence Error",
-            "Growth Rate Window",
-        )
         plot_errors(save_loc, df, sns.barplot, "Growth Rate Window", "Error", "Model")
-        plot_errors(
-            save_loc,
-            df_freqdepend,
-            sns.barplot,
-            "Growth Rate Window",
-            "Frequency Dependence Error",
-            "Model",
-        )
         plot_errors(save_loc, df, sns.barplot, "Growth Rate Window", "Error", None)
-        plot_errors(
-            save_loc,
-            df_freqdepend,
-            sns.barplot,
-            "Growth Rate Window",
-            "Frequency Dependence Error",
-            None,
-        )
 
+        # TODO make pretty plot
         df = pd.melt(
             df,
             id_vars=["Model", "Experiment"],

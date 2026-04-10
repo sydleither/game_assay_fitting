@@ -93,14 +93,12 @@ def quantitative_results(save_loc, df):
 def main():
     # Read in arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("-dir", "--data_dir", type=str, default="data/abm/formatted")
+    parser.add_argument("-dir", "--data_dir", type=str)
     args = parser.parse_args()
 
     # Get fits and ground truth
     fit_df = get_fit_df(args.data_dir)
     gt_df = pd.read_csv(f"{args.data_dir}/ground_truth.csv")
-
-    # Combine fit and ground truth dataframes
     gt_df["Model"] = "Ground Truth"
     df = pd.concat([fit_df, gt_df])
 
