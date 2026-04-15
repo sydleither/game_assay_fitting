@@ -378,7 +378,10 @@ def estimate_growth_rate(data_df, well_id=None, cell_type=None, growth_rate_wind
     x = curr_df["Time"].values - curr_df["Time"].values[0]  # Start the time at 0
     y = np.log(curr_df["Count"].values)  # Log-transform
     slope, intercept, low_slope, high_slope = stats.theilslopes(y, x)
-    return slope, intercept, low_slope, high_slope
+    Y_pred = slope * x + intercept
+    error = np.sum(np.square(np.exp(y) - np.exp(Y_pred)))
+    bic = calculate_bic(curr_df, error, 2)
+    return slope, intercept, low_slope, high_slope, error, bic
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -510,7 +513,7 @@ def optimize_growth_rate_window_per_well(df):
             for cell_type in df_well["CellType"].unique():
                 df_ct = df_well[df_well["CellType"] == cell_type]
                 _, fit = optimize_growth_rate_window_per_cell(
-                    df_ct, return_fit_df=True, filter_by_dominant_sign=False
+                    df_ct.copy(), return_fit_df=True, filter_by_dominant_sign=False
                 )
                 fits.append(fit)
             fit_df = pd.concat(fits, ignore_index=True)
@@ -534,15 +537,9 @@ def optimize_growth_rate_window_per_well(df):
     return df
 
 
-def calculate_growth_rate_fit_error(well_df, slope, intercept, growth_rate_window):
-    tmp_df = well_df[well_df["Time"].between(growth_rate_window[0], growth_rate_window[1])].copy()
-    X = tmp_df["Time"].values
-    Y = tmp_df["Count"].values
-    Y_pred = slope * (X - growth_rate_window[0]) + intercept
-    return np.sum(np.square(Y - np.exp(Y_pred)))
-
-
 def calculate_bic(well_df, sum_squared_residuals, k=2):
+    if sum_squared_residuals == 0:
+        return 0
     n_data_points = well_df.shape[0]
     bic = n_data_points * np.log(sum_squared_residuals / n_data_points) + k * np.log(n_data_points)
     return bic
@@ -557,7 +554,7 @@ def optimize_growth_rate_window_per_cell(
     top_quantile_of_slopes_to_include=0.25,
     plot_fits=False,
     return_fit_df=False,
-    verbose=False
+    verbose=False,
 ):
     """
     This function will test different windows for growth rate estimation and select the optimal one
@@ -617,16 +614,8 @@ def optimize_growth_rate_window_per_cell(
             curr_window = well_df["Time"].unique()[[start_idx, start_idx + window_size]]
 
             # Estimate growth rate for this window
-            curr_slope, curr_intercept, _, _ = estimate_growth_rate(
+            curr_slope, curr_intercept, _, _, error, bic = estimate_growth_rate(
                 well_df, growth_rate_window=curr_window
-            )
-
-            # Calculate the goodness of fit for this window
-            sum_squared_residuals = calculate_growth_rate_fit_error(
-                well_df, curr_slope, curr_intercept, curr_window
-            )
-            bic = calculate_bic(
-                well_df["Time"].between(curr_window[0], curr_window[1]), sum_squared_residuals
             )
             tmp_list.append(
                 {
@@ -638,7 +627,7 @@ def optimize_growth_rate_window_per_cell(
                     "Slope": curr_slope,
                     "Intercept": curr_intercept,
                     "StartIdx_at_edge": i == len(start_points_to_test_list) - 1,
-                    "SumSquaredResiduals": sum_squared_residuals,
+                    "SumSquaredResiduals": error,
                     "BIC": bic,
                 }
             )

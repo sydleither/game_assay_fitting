@@ -158,7 +158,7 @@ def main():
     parser.add_argument("-in", "--in_dir", type=str, default="experimental")
     parser.add_argument("-out", "--out_dir", type=str, default="gr_experimental")
     parser.add_argument("-w", "--window", type=str, choices=["none", "per_exp", "per_well"])
-    parser.add_argument("-plot", "--plot", type=int, default=0)
+    parser.add_argument("-plot", "--plot", type=int, default=0, choices=[0, 1])
     args = parser.parse_args()
 
     # Check that input data path exists
@@ -195,9 +195,10 @@ def main():
         plot_qualitative(save_loc, df, "Lotka-Volterra")
 
         df = df[(df["Growth Rate Window"] != "Ground Truth") & (df["Model"] != "Ground Truth")]
-        plot_errors(save_loc, df, sns.barplot, "Model", "Error", "Growth Rate Window")
         plot_errors(save_loc, df, sns.barplot, "Growth Rate Window", "Error", "Model")
         plot_errors(save_loc, df, sns.barplot, "Growth Rate Window", "Error", None)
+        plot_errors(save_loc, df, sns.barplot, "Growth Rate Window", "BIC", "Model")
+        plot_errors(save_loc, df, sns.barplot, "Growth Rate Window", "BIC", None)
 
         # TODO make pretty plot
         df = pd.melt(

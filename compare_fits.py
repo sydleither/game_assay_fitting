@@ -62,6 +62,7 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
     growth_rate_df = growth_rate_df.rename(
         {
             "GrowthRate_error": "Error",
+            "GrowthRate_BIC": "BIC",
             f"Fraction_{sensitive_type}": "Fraction Sensitive",
         },
         axis=1,
@@ -80,6 +81,7 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
             "GrowthRate_window_start",
             "GrowthRate_window_end",
             "Error",
+            "BIC"
         ]
     ]
     # Combine dataframes

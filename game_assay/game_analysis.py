@@ -164,8 +164,9 @@ def calculate_growth_rates(
         # Estimate growth rate
         if curr_df["Count"].min() <= 0 or fractions[f"Fraction_{cell_type}"] == 0:
             slope, intercept, low_slope, high_slope = np.nan, np.nan, np.nan, np.nan
+            error, bic = np.nan, np.nan
         else:
-            slope, intercept, low_slope, high_slope = estimate_growth_rate(
+            slope, intercept, low_slope, high_slope, error, bic = estimate_growth_rate(
                 data_df=counts_df[counts_df["PlateId"] == plate_id],
                 well_id=well_id,
                 cell_type=cell_type,
@@ -185,8 +186,8 @@ def calculate_growth_rates(
                 "Intercept": intercept,
                 "GrowthRate_window_start": growth_rate_window[0],
                 "GrowthRate_window_end": growth_rate_window[1],
-                "GrowthRate_error": curr_df["Error"].values[0],
-                "GrowthRate_BIC": curr_df["BIC"].values[0],
+                "GrowthRate_error": error,
+                "GrowthRate_BIC": bic,
             }
         )
     growth_rate_df = pd.DataFrame(tmp_list)

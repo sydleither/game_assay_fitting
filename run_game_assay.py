@@ -226,39 +226,42 @@ def plot_spatial(save_loc, data_dir, df, cell_colors, times):
         plt.close()
 
 
-def individual_analysis(data_dir, exp_name, rewrite=True):
+def individual_analysis(data_dir, exp_name, rewrite=True, save_plots=True):
     # Create images directory
     save_loc = f"{data_dir}/{exp_name}/images"
     if not os.path.exists(save_loc):
         os.mkdir(save_loc)
 
+    # Save data csvs
     counts_df = calculate_counts(data_dir, exp_name, rewrite)
     sensitive_type, resistant_type = get_cell_types(exp_name)
     cell_types = [sensitive_type, resistant_type]
-    cell_colors = {sensitive_type: "#4C956C", resistant_type: "#EF7C8E"}
     growth_rate_df = calculate_growth_rates(
         data_dir, exp_name, counts_df, None, cell_types, rewrite
     )
     payoff_df = calculate_payoffs(
         data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}", rewrite
     )
+    locations_df = calculate_locations(data_dir, exp_name, counts_df, rewrite)
 
-    # Plot experiment visualizations
-    plot_counts(save_loc, counts_df, cell_colors)
-    plot_drug_concentration(save_loc, counts_df, cell_types)
-    plot_seeded_fraction(save_loc, counts_df, cell_types)
+    if save_plots:
+        cell_colors = {sensitive_type: "#4C956C", resistant_type: "#EF7C8E"}
 
-    # Plot fits for no drug condition
-    plot_fits(save_loc, exp_name, counts_df, growth_rate_df, cell_types, cell_colors)
-    plot_fits(
-        save_loc, exp_name, counts_df, growth_rate_df, cell_types, cell_colors, log_space=True
-    )
-    plot_freqdepend_fit(save_loc, exp_name, growth_rate_df, payoff_df, cell_colors, cell_types)
+        # Plot experiment visualizations
+        plot_counts(save_loc, counts_df, cell_colors)
+        plot_drug_concentration(save_loc, counts_df, cell_types)
+        plot_seeded_fraction(save_loc, counts_df, cell_types)
 
-    # Plot spatial visualizations
-    locations_df = calculate_locations(data_dir, exp_name, counts_df)
-    times = sorted(counts_df["Time"].unique())[::2]
-    plot_spatial(save_loc, data_dir, locations_df, cell_colors, times)
+        # Plot fits for no drug condition
+        plot_fits(save_loc, exp_name, counts_df, growth_rate_df, cell_types, cell_colors)
+        plot_fits(
+            save_loc, exp_name, counts_df, growth_rate_df, cell_types, cell_colors, log_space=True
+        )
+        plot_freqdepend_fit(save_loc, exp_name, growth_rate_df, payoff_df, cell_colors, cell_types)
+
+        # Plot spatial visualizations
+        times = sorted(counts_df["Time"].unique())[::2]
+        plot_spatial(save_loc, data_dir, locations_df, cell_colors, times)
 
 
 def main():
@@ -266,15 +269,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
     parser.add_argument("-exp", "--exp_name", type=str, default=None)
+    parser.add_argument("-p", "--plot", type=int, default=1, choices=[0, 1])
     args = parser.parse_args()
 
     # Save data csvs and plot experiment analysis
+    save_plots = True if args.plot == 1 else 0
     exp_names = [args.exp_name] if args.exp_name else os.listdir(args.data_dir)
     for exp_name in exp_names:
         if os.path.isfile(f"{args.data_dir}/{exp_name}") or exp_name == "layout_files":
             continue
         print(exp_name)
-        individual_analysis(args.data_dir, exp_name)
+        individual_analysis(args.data_dir, exp_name, save_plots=save_plots)
 
 
 if __name__ == "__main__":

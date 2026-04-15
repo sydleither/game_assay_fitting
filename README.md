@@ -41,7 +41,16 @@ With the post-cellprofiler data, replicate this file structure:
                 └── segmentation_results_well_{...}_locations_{...}.csv
 ```
 
-## Run game assay, ODE models, and plot fits
+## Find ideal exponential growth window stratedgy
+```
+python3 run_game_assay.py -dir data/experimental
+python3 growth_rate_window.py -w per_well
+python3 growth_rate_window.py -w per_exp
+python3 growth_rate_window.py -w none
+python3 growth_rate_window.py -p 1
+```
+
+## Run game assay, ODE models, and plot fits:
 ### On frequency-dependent ODE data
 ```
 python3 create_ode_data.py -dir data/ode_egt -model replicator
