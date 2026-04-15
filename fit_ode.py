@@ -152,6 +152,7 @@ def fit(
         columns="CellType",
         values="Count",
     ).reset_index()
+    df_pivot = df_pivot.dropna()
     df_pivot["UniqueId"] = df_pivot["PlateId"].map(str) + df_pivot["WellId"]
     df["UniqueId"] = df["PlateId"].map(str) + df["WellId"]
 

@@ -496,7 +496,6 @@ def optimize_growth_rate_window_per_exp(df):
     best_window = fits.loc[fits["BIC"].idxmin()]
     df["GrowthRate_window_start"] = best_window["Window_Start"]
     df["GrowthRate_window_end"] = best_window["Window_End"]
-    df["BIC"] = best_window["BIC"]
     return df
 
 
@@ -517,8 +516,10 @@ def optimize_growth_rate_window_per_well(df):
                 )
                 fits.append(fit)
             fit_df = pd.concat(fits, ignore_index=True)
+            if len(fit_df) == 0:
+                continue
             fit_df = (
-                fit_df[["Window_Start", "Window_End", "BIC", "SumSquaredResiduals"]]
+                fit_df[["Window_Start", "Window_End", "BIC"]]
                 .groupby(["Window_Start", "Window_End"])
                 .mean()
                 .reset_index()
@@ -530,10 +531,6 @@ def optimize_growth_rate_window_per_well(df):
             df.loc[(df["PlateId"] == plate) & (df["WellId"] == well), "GrowthRate_window_end"] = (
                 best_window["Window_End"]
             )
-            df.loc[(df["PlateId"] == plate) & (df["WellId"] == well), "BIC"] = best_window["BIC"]
-            df.loc[(df["PlateId"] == plate) & (df["WellId"] == well), "Error"] = best_window[
-                "SumSquaredResiduals"
-            ]
     return df
 
 
@@ -713,8 +710,6 @@ def optimize_growth_rate_window_per_cell(
             )
     well_df["GrowthRate_window_start"] = best_window["Window"][0]
     well_df["GrowthRate_window_end"] = best_window["Window"][1]
-    well_df["BIC"] = best_window["BIC"]
-    well_df["Error"] = best_window["SumSquaredResiduals"]
     if return_fit_df:
         return well_df, fit_summary_df
     return well_df

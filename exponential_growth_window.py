@@ -111,6 +111,8 @@ def save_growth_rate(in_data_dir, out_data_dir, exp_name, window):
     gr_window = None
     if window == "none":
         gr_window = (counts_df["Time"].min(), counts_df["Time"].max())
+    elif window == "per_well":
+        counts_df = optimize_growth_rate_window_per_well(counts_df)
     elif window == "per_exp":
         counts_df = optimize_growth_rate_window_per_exp(counts_df)
 
@@ -157,7 +159,9 @@ def main():
     parser.add_argument("-dir", "--data_dir", type=str, default="data")
     parser.add_argument("-in", "--in_dir", type=str, default="experimental")
     parser.add_argument("-out", "--out_dir", type=str, default="gr_experimental")
-    parser.add_argument("-w", "--window", type=str, choices=["none", "per_exp", "per_well"])
+    parser.add_argument(
+        "-w", "--window", type=str, choices=["none", "per_exp", "per_well", "per_cell"]
+    )
     parser.add_argument("-plot", "--plot", type=int, default=0, choices=[0, 1])
     args = parser.parse_args()
 

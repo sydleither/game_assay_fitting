@@ -44,10 +44,10 @@ With the post-cellprofiler data, replicate this file structure:
 ## Find ideal exponential growth window stratedgy
 ```
 python3 run_game_assay.py -dir data/experimental
-python3 growth_rate_window.py -w per_well
-python3 growth_rate_window.py -w per_exp
-python3 growth_rate_window.py -w none
-python3 growth_rate_window.py -p 1
+python3 exponential_growth_window.py -w per_well
+python3 exponential_growth_window.py -w per_exp
+python3 exponential_growth_window.py -w none
+python3 exponential_growth_window.py -p 1
 ```
 
 ## Run game assay, ODE models, and plot fits:

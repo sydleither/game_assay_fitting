@@ -103,11 +103,11 @@ def get_fit_df(data_dir):
                 df_ode.append(read_and_format_ode(data_dir, exp_name, file_name, sensitive_type))
         if len(df_ode) == 0:
             continue
-        df_ode = pd.concat(df_ode)
+        df_ode = pd.concat(df_ode, ignore_index=True)
         # Read in game assay fit data
         df_assay = read_and_format_game_assay(data_dir, exp_name, sensitive_type)
         # Merge game assay and ODE dataframes
-        df_comb = pd.concat([df_ode, df_assay])
+        df_comb = pd.concat([df_ode, df_assay], ignore_index=True)
         df_comb["Experiment"] = exp_name
         df_comb["Resistant Type"] = resistant_type
         df.append(df_comb)

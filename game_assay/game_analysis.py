@@ -9,7 +9,7 @@ from game_assay.game_analysis_utils import (
     estimate_growth_rate,
     load_cellprofiler_data,
     map_well_to_experimental_condition,
-    optimize_growth_rate_window_per_well,
+    optimize_growth_rate_window_per_cell,
 )
 
 
@@ -138,7 +138,9 @@ def calculate_growth_rates(
         counts_df["GrowthRate_window_start"] = growth_rate_window[0]
         counts_df["GrowthRate_window_end"] = growth_rate_window[1]
     elif "GrowthRate_window_start" not in counts_df.columns:
-        counts_df = optimize_growth_rate_window_per_well(counts_df)
+        counts_df = counts_df.groupby(["PlateId", "WellId", "CellType"], group_keys=False)[
+            counts_df.columns
+        ].apply(optimize_growth_rate_window_per_cell)
 
     for plate_id, well_id, cell_type in product(
         counts_df["PlateId"].unique(), counts_df["WellId"].unique(), cell_type_list
