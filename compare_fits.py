@@ -59,6 +59,8 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
     )
     payoff_df = payoff_df.drop(["n", "c12", "c21", "r1", "r2"], axis=1)
     # Format growth rate dataframe
+    if "BIC" in growth_rate_df: #TODO
+        growth_rate_df = growth_rate_df.drop("BIC", axis=1)
     growth_rate_df = growth_rate_df.rename(
         {
             "GrowthRate_error": "Error",
@@ -178,6 +180,29 @@ def label_qualitative_dynamics(df, keys=["Model", "Experiment"]):
     df_q["Dynamic"] = df_q["Lotka-Volterra Dynamic"].fillna(df_q["Replicator Dynamic"])
     df_q = df_q[keys + ["Dynamic"]]
     return df.merge(df_q, on=keys)
+
+
+def format_for_plotting(df):
+    # Formatting exponential growth window
+    if "Growth Rate Window" in df.columns:
+        df.loc[df["Growth Rate Window"] == "per_exp", "Growth Rate Window"] = "Per-Experiment"
+        df.loc[df["Growth Rate Window"] == "per_well", "Growth Rate Window"] = "Per-Replicate"
+        df.loc[df["Growth Rate Window"] == "per_cell", "Growth Rate Window"] = "Per-Cell-Type"
+        df.loc[df["Growth Rate Window"] == "none", "Growth Rate Window"] = "None"
+        df = df.rename({"Growth Rate Window": "Exponential Growth Window Strategy"}, axis=1)
+    # Formatting parameter names
+    new_param_names = {}
+    for param in get_parameter_names():
+        new_param = param
+        if "p_" in param or "a_" in param:
+            new_param = param.upper()
+        new_param = fr"${new_param[0]}_{{{new_param[2:]}}}$"
+        new_param_names[param] = new_param
+    df = df.rename(new_param_names, axis=1)
+    # Renaming replicator to exponential growth
+    df.loc[df["Model"] == "Replicator", "Model"] = "Exponential Growth ODE"
+    df.loc[df["Model"] == "Lotka-Volterra", "Model"] = "Lotka-Volterra ODE"
+    return df
 
 
 #########
@@ -307,10 +332,10 @@ def plot_errors(save_loc, df, sns_plot, x, y, hue):
     plt.close()
 
 
-def plot_qualitative(data_dir, df):
-    df = df[["Experiment", "Model", "Dynamic"]].copy().drop_duplicates()
-    df = df.sort_values(by=["Model", "Experiment"])
-    models = df["Model"].unique()
+def plot_qualitative(data_dir, df, focal_col="Model", sub_col=None):
+    df = df[["Experiment", focal_col, "Dynamic"]].copy().drop_duplicates()
+    df = df.sort_values(by=[focal_col, "Experiment"])
+    models = df[focal_col].unique()
     model_combos = list(combinations(models, 2))
     labels = sorted(df["Dynamic"].unique())
     num_experiments = len(df["Experiment"].unique())
@@ -318,8 +343,8 @@ def plot_qualitative(data_dir, df):
     confusion_matrices = []
     for model1, model2 in model_combos:
         mat = confusion_matrix(
-            df[df["Model"] == model1]["Dynamic"],
-            df[df["Model"] == model2]["Dynamic"],
+            df[df[focal_col] == model1]["Dynamic"],
+            df[df[focal_col] == model2]["Dynamic"],
             labels=labels,
         )
         confusion_matrices.append(mat)
@@ -347,9 +372,14 @@ def plot_qualitative(data_dir, df):
         )
     fig.colorbar(ax[0].collections[0], cax=ax[-1])
     ax[-1].set(ylabel="Number of Experiments")
-    fig.suptitle("Qualitative Agreement between Models")
+    if not sub_col:
+        fig.suptitle(f"Qualitative Agreement between {focal_col}s")
+        figname = f"qualitative_agreement_{focal_col}.png"
+    else:
+        fig.suptitle(f"Qualitative Agreement between {focal_col}s for {sub_col}")
+        figname = f"qualitative_agreement_{focal_col}_{sub_col}.png"
     fig.patch.set_alpha(0.0)
-    fig.savefig(f"{data_dir}/qualitative_agreement.png", bbox_inches="tight", dpi=200)
+    fig.savefig(f"{data_dir}/{figname}", bbox_inches="tight", dpi=200)
     plt.close()
 
 

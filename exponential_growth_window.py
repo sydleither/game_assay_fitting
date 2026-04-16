@@ -6,7 +6,14 @@ import pandas as pd
 import seaborn as sns
 from sklearn.metrics import accuracy_score
 
-from compare_fits import get_fit_df, label_qualitative_dynamics, plot_errors, plot_errors_facet
+from compare_fits import (
+    format_for_plotting,
+    get_fit_df,
+    label_qualitative_dynamics,
+    plot_errors,
+    plot_errors_facet,
+    plot_qualitative,
+)
 from fit_ode import fit
 from game_assay.game_analysis import calculate_counts, calculate_growth_rates, calculate_payoffs
 from game_assay.game_analysis_utils import (
@@ -14,62 +21,159 @@ from game_assay.game_analysis_utils import (
     optimize_growth_rate_window_per_well,
 )
 from run_game_assay import plot_fits, plot_freqdepend_fit
-from utils import get_cell_types, get_parameter_names
+from utils import get_cell_types
 
 
-def plot_qualitative(data_dir, df, model):  # TODO merge with compare_estimations plot_qualitative
-    df_model = df[(df["Model"] == model) | (df["Model"] == "Ground Truth")]
-    df_q = df_model[["Growth Rate Window", "Experiment", "Dynamic"]].drop_duplicates()
-    df_q = df_q.sort_values(by=["Growth Rate Window", "Experiment"])
-    gr_windows = df_model["Growth Rate Window"].unique()
+def plot_agreement(data_dir, df):
+    def heatmap(df_model_agr, model):
+        df_model_agr = df_model_agr.pivot(
+            index="Exponential Growth Window Strategy 1",
+            columns="Exponential Growth Window Strategy 2",
+            values="Agreement",
+        )
 
-    agreements = []
-    for i in range(len(gr_windows)):
-        for j in range(i + 1, len(gr_windows)):
-            acc = accuracy_score(
-                df_q[df_q["Growth Rate Window"] == gr_windows[i]]["Dynamic"],
-                df_q[df_q["Growth Rate Window"] == gr_windows[j]]["Dynamic"],
-            )
-            agreements.append(
-                {
-                    "Growth Rate Window 1": gr_windows[i],
-                    "Growth Rate Window 2": gr_windows[j],
-                    "Agreement": acc,
-                }
-            )
+        fig, ax = plt.subplots(figsize=(6, 6))
+        sns.heatmap(df_model_agr, annot=True, vmin=0, vmax=1, ax=ax)
+        ax.set_title(f"Agreement Between Exponential Growth Window Strategys for {model}")
+        fig.patch.set_alpha(0.0)
+        fig.tight_layout()
+        fig.savefig(f"{data_dir}/agreement_{model}.png", bbox_inches="tight", dpi=200)
+        plt.close()
 
-    df_agr = pd.DataFrame(agreements)
-    df_agr2 = df_agr.copy()
-    df_agr2["temp"] = df_agr2["Growth Rate Window 1"]
-    df_agr2["Growth Rate Window 1"] = df_agr2["Growth Rate Window 2"]
-    df_agr2["Growth Rate Window 2"] = df_agr2["temp"]
-    df_agr = pd.concat([df_agr, df_agr2])
-    df_acc = df_agr[df_agr["Growth Rate Window 1"] == "Ground Truth"].copy()
-    df_acc = df_acc.rename(
-        {"Growth Rate Window 2": "Growth Rate Window", "Agreement": "Accuracy"}, axis=1
+    df_agr = []
+    for model in df["Model"].unique():
+        df_model = df[df["Model"] == model]
+        df_q = df_model[
+            ["Exponential Growth Window Strategy", "Experiment", "Dynamic"]
+        ].drop_duplicates()
+        df_q = df_q.sort_values(by=["Exponential Growth Window Strategy", "Experiment"])
+        gr_windows = df_model["Exponential Growth Window Strategy"].unique()
+
+        agreements = []
+        for i in range(len(gr_windows)):
+            for j in range(i + 1, len(gr_windows)):
+                acc = accuracy_score(
+                    df_q[df_q["Exponential Growth Window Strategy"] == gr_windows[i]]["Dynamic"],
+                    df_q[df_q["Exponential Growth Window Strategy"] == gr_windows[j]]["Dynamic"],
+                )
+                agreements.append(
+                    {
+                        "Exponential Growth Window Strategy 1": gr_windows[i],
+                        "Exponential Growth Window Strategy 2": gr_windows[j],
+                        "Agreement": acc,
+                    }
+                )
+
+        df_model_agr = pd.DataFrame(agreements)
+        df_model_agr2 = df_model_agr.copy()
+        df_model_agr2["temp"] = df_model_agr2["Exponential Growth Window Strategy 1"]
+        df_model_agr2["Exponential Growth Window Strategy 1"] = df_model_agr2[
+            "Exponential Growth Window Strategy 2"
+        ]
+        df_model_agr2["Exponential Growth Window Strategy 2"] = df_model_agr2["temp"]
+        df_model_agr = pd.concat([df_model_agr, df_model_agr2])
+        heatmap(df_model_agr, model)
+        df_model_agr["Model"] = model
+        df_agr.append(df_model_agr)
+
+    df_agr = pd.concat(df_agr, ignore_index=True)
+    df_agr = df_agr.sort_values(by="Model")
+    df_agr["Exponential Growth Window Strategy"] = df_agr["Exponential Growth Window Strategy 1"]
+    fig, ax = plt.subplots(figsize=(5, 5))
+    sns.barplot(df_agr, x="Exponential Growth Window Strategy", y="Agreement", hue="Model", ax=ax)
+    ax.tick_params("x", rotation=45)
+    fig.suptitle(
+        "Agreement in Qualitative Interaction Classification\nbetween Window Strategies and Models"
     )
-    df_agr = df_agr[
-        (df_agr["Growth Rate Window 1"] != "Ground Truth")
-        & (df_agr["Growth Rate Window 2"] != "Ground Truth")
-    ]
-    df_agr = df_agr.pivot(
-        index="Growth Rate Window 1", columns="Growth Rate Window 2", values="Agreement"
-    )
-
-    fig, ax = plt.subplots(figsize=(6, 6))
-    sns.heatmap(df_agr, annot=True, vmin=0, vmax=1, ax=ax)
-    ax.set_title(f"Agreement Between Growth Rate Windows for {model}")
     fig.patch.set_alpha(0.0)
     fig.tight_layout()
-    fig.savefig(f"{data_dir}/agreement_{model}.png", bbox_inches="tight", dpi=200)
+    fig.savefig(f"{data_dir}/agreement_aggregated.png", bbox_inches="tight", dpi=200)
     plt.close()
 
-    fig, ax = plt.subplots(figsize=(4, 4))
-    sns.barplot(df_acc, x="Growth Rate Window", y="Accuracy", ax=ax)
-    ax.set_title(f"Accuracy of Growth Rate Windows for {model}")
-    fig.patch.set_alpha(0.0)
-    fig.tight_layout()
-    fig.savefig(f"{data_dir}/accuracy_{model}.png", bbox_inches="tight", dpi=200)
+
+def plot_parameter_ranges(data_dir, df):
+    df_param = pd.melt(
+        df,
+        id_vars=["Model", "Exponential Growth Window Strategy", "Experiment"],
+        value_vars=[x for x in df.columns if x[0] == "$"],
+        var_name="Parameter",
+        value_name="Value",
+    )
+    df_param = df_param.reset_index(drop=True).dropna().drop_duplicates()
+    df_param.loc[df_param["Parameter"].str.contains("A"), "Model"] = (
+        "Lotka-Volterra Interaction Matrix"
+    )
+    df_param.loc[df_param["Parameter"].str.contains("r"), "Model"] = (
+        "Lotka-Volterra Intrinsic Growths"
+    )
+    df_param = df_param.sort_values(by=["Model", "Experiment", "Parameter"], ascending=False)
+
+    facet_grid = sns.FacetGrid(
+        df_param,
+        col="Model",
+        sharex=False,
+        sharey=False,
+        height=4,
+        aspect=1,
+    )
+    facet_grid.map_dataframe(
+        sns.boxplot, x="Parameter", y="Value", hue="Exponential Growth Window Strategy"
+    )
+    facet_grid.set_titles("{col_name}")
+    facet_grid.figure.suptitle("Parameter Ranges of Models Fit on Experimental Data")
+    facet_grid.figure.patch.set_alpha(0.0)
+    facet_grid.tight_layout()
+    facet_grid.savefig(f"{data_dir}/parameter_range.png", bbox_inches="tight", dpi=200)
+    plt.close()
+
+    print(df_param.groupby(["Exponential Growth Window Strategy"]).var(numeric_only=True))
+
+    for window in df["Exponential Growth Window Strategy"].unique():
+        facet_grid = sns.FacetGrid(
+            df_param[df_param["Exponential Growth Window Strategy"] == window],
+            col="Model",
+            sharex=False,
+            sharey=False,
+            height=4,
+            aspect=1,
+        )
+        facet_grid.map_dataframe(sns.boxplot, x="Parameter", y="Value")
+        facet_grid.set_titles("{col_name}")
+        facet_grid.figure.suptitle(
+            f"Parameter Ranges of Models Fit on Experimental Data under {window} Window Strategy"
+        )
+        facet_grid.figure.patch.set_alpha(0.0)
+        facet_grid.tight_layout()
+        facet_grid.savefig(f"{data_dir}/parameter_range_{window}.png", bbox_inches="tight", dpi=200)
+        plt.close()
+
+
+def plot_dynamics(save_loc, df):
+    df_dynamic = (
+        df[["Exponential Growth Window Strategy", "Model", "Experiment", "Dynamic"]]
+        .drop_duplicates()
+        .groupby(["Exponential Growth Window Strategy", "Model", "Dynamic"])
+        .count()
+        .reset_index()
+    )
+    facet_grid = sns.displot(
+        df_dynamic,
+        col="Model",
+        x="Exponential Growth Window Strategy",
+        weights="Experiment",
+        hue="Dynamic",
+        hue_order=sorted(df_dynamic["Dynamic"].unique()),
+        kind="hist",
+        multiple="stack",
+        height=4,
+        aspect=1,
+    )
+    facet_grid.add_legend()
+    facet_grid.figure.suptitle("Classified Qualitative Interactions")
+    sns.move_legend(facet_grid, loc="center right", bbox_to_anchor = (1.1, 0))
+    facet_grid.figure.patch.set_alpha(0.0)
+    facet_grid.tight_layout()
+    facet_grid.savefig(f"{save_loc}/window_dynamics.png", bbox_inches="tight", dpi=200)
     plt.close()
 
 
@@ -89,13 +193,14 @@ def get_growth_rates(data_dir, in_dir):
         if os.path.isfile(f"{data_dir}/{gr_window}"):
             continue
         df_window = get_fit_df(f"{data_dir}/{gr_window}")
-        df_window["Growth Rate Window"] = gr_window.title()
+        df_window["Growth Rate Window"] = gr_window
         df.append(df_window)
     df = pd.concat(df)
 
     # Final formatting and return
     df = get_ground_truth(in_dir, df)
     df = label_qualitative_dynamics(df, ["Growth Rate Window", "Model", "Experiment"])
+    df = format_for_plotting(df)
     return df.reset_index()
 
 
@@ -193,27 +298,30 @@ def main():
     # Save results
     if args.plot == 1:
         df = get_growth_rates(save_loc, f"{args.data_dir}/{args.in_dir}")
+        df = df[
+            (df["Exponential Growth Window Strategy"] != "Ground Truth")
+            & (df["Model"] != "Ground Truth")
+        ]
 
-        plot_qualitative(save_loc, df, "Game Assay")
-        plot_qualitative(save_loc, df, "Replicator")
-        plot_qualitative(save_loc, df, "Lotka-Volterra")
+        plot_dynamics(save_loc, df)
 
-        df = df[(df["Growth Rate Window"] != "Ground Truth") & (df["Model"] != "Ground Truth")]
-        plot_errors(save_loc, df, sns.barplot, "Growth Rate Window", "Error", "Model")
-        plot_errors(save_loc, df, sns.barplot, "Growth Rate Window", "Error", None)
-        plot_errors(save_loc, df, sns.barplot, "Growth Rate Window", "BIC", "Model")
-        plot_errors(save_loc, df, sns.barplot, "Growth Rate Window", "BIC", None)
+        for model in df["Model"].unique():
+            plot_qualitative(
+                save_loc,
+                df[df["Model"] == model],
+                focal_col="Exponential Growth Window Strategy",
+                sub_col=model,
+            )
+        plot_agreement(save_loc, df)
 
-        # TODO make pretty plot
-        df = pd.melt(
-            df,
-            id_vars=["Model", "Experiment"],
-            value_vars=get_parameter_names(),
-            var_name="Parameter",
-            value_name="Value",
+        plot_errors(
+            save_loc, df, sns.barplot, "Exponential Growth Window Strategy", "Error", "Model"
         )
-        df = df.reset_index(drop=True)
-        plot_errors_facet(save_loc, df, sns.scatterplot, "Model", "Value", None, "Parameter")
+        plot_errors(save_loc, df, sns.barplot, "Exponential Growth Window Strategy", "Error", None)
+        plot_errors(save_loc, df, sns.barplot, "Exponential Growth Window Strategy", "BIC", "Model")
+        plot_errors(save_loc, df, sns.barplot, "Exponential Growth Window Strategy", "BIC", None)
+
+        plot_parameter_ranges(save_loc, df)
 
 
 if __name__ == "__main__":
