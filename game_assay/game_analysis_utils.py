@@ -355,7 +355,7 @@ def plot_drug_bar(
 
 
 # ---------------------------------------------------------------------------------------------------------------
-def estimate_growth_rate(data_df, well_id=None, cell_type=None, growth_rate_window=[0, 24]):
+def estimate_growth_rate(data_df, growth_rate_window, well_id=None, cell_type=None, logspace=False):
     """
     Estimate the (exponential) growth rate of a cell population in a well.
     data_df: pandas dataframe containing the cell count data
@@ -379,7 +379,10 @@ def estimate_growth_rate(data_df, well_id=None, cell_type=None, growth_rate_wind
     y = np.log(curr_df["Count"].values)  # Log-transform
     slope, intercept, low_slope, high_slope = stats.theilslopes(y, x)
     Y_pred = slope * x + intercept
-    error = np.sum(np.square(np.exp(y) - np.exp(Y_pred)))
+    if logspace:
+        error = np.sum(np.square(y - Y_pred))
+    else:
+        error = np.sum(np.square(np.exp(y) - np.exp(Y_pred)))
     bic = calculate_bic(curr_df, error, 2)
     return slope, intercept, low_slope, high_slope, error, bic
 
@@ -612,7 +615,7 @@ def optimize_growth_rate_window_per_cell(
 
             # Estimate growth rate for this window
             curr_slope, curr_intercept, _, _, error, bic = estimate_growth_rate(
-                well_df, growth_rate_window=curr_window
+                well_df, growth_rate_window=curr_window, logspace=True
             )
             tmp_list.append(
                 {

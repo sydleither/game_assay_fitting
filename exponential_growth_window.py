@@ -11,7 +11,6 @@ from compare_fits import (
     get_fit_df,
     label_qualitative_dynamics,
     plot_errors,
-    plot_errors_facet,
     plot_qualitative,
 )
 from fit_ode import fit
@@ -127,6 +126,11 @@ def plot_parameter_ranges(data_dir, df):
     plt.close()
 
     print(df_param.groupby(["Exponential Growth Window Strategy"]).var(numeric_only=True))
+    def q1(x):
+        return x.quantile(0.25)
+    def q3(x):
+        return x.quantile(0.75)
+    print(df_param[["Parameter", "Value"]].groupby("Parameter").agg([q1, q3]))
 
     for window in df["Exponential Growth Window Strategy"].unique():
         facet_grid = sns.FacetGrid(
