@@ -90,7 +90,7 @@ def plot_agreement(data_dir, df):
     plt.close()
 
 
-def plot_parameter_ranges(data_dir, df):
+def plot_parameter_ranges(data_dir, df, data_type):
     df_param = pd.melt(
         df,
         id_vars=["Model", "Exponential Growth Window Strategy", "Experiment"],
@@ -107,30 +107,24 @@ def plot_parameter_ranges(data_dir, df):
     )
     df_param = df_param.sort_values(by=["Model", "Experiment", "Parameter"], ascending=False)
 
-    facet_grid = sns.FacetGrid(
+    facet_grid = sns.catplot(
         df_param,
         col="Model",
+        x="Parameter",
+        y="Value",
+        hue="Exponential Growth Window Strategy",
+        kind="box",
         sharex=False,
         sharey=False,
         height=4,
         aspect=1,
     )
-    facet_grid.map_dataframe(
-        sns.boxplot, x="Parameter", y="Value", hue="Exponential Growth Window Strategy"
-    )
     facet_grid.set_titles("{col_name}")
-    facet_grid.figure.suptitle("Parameter Ranges of Models Fit on Experimental Data")
+    facet_grid.figure.suptitle(f"Parameter Ranges of Models Fit on {data_type} Data")
     facet_grid.figure.patch.set_alpha(0.0)
     facet_grid.tight_layout()
     facet_grid.savefig(f"{data_dir}/parameter_range.png", bbox_inches="tight", dpi=200)
     plt.close()
-
-    print(df_param.groupby(["Exponential Growth Window Strategy"]).var(numeric_only=True))
-    def q1(x):
-        return x.quantile(0.25)
-    def q3(x):
-        return x.quantile(0.75)
-    print(df_param[["Parameter", "Value"]].groupby("Parameter").agg([q1, q3]))
 
     for window in df["Exponential Growth Window Strategy"].unique():
         facet_grid = sns.FacetGrid(
@@ -144,7 +138,7 @@ def plot_parameter_ranges(data_dir, df):
         facet_grid.map_dataframe(sns.boxplot, x="Parameter", y="Value")
         facet_grid.set_titles("{col_name}")
         facet_grid.figure.suptitle(
-            f"Parameter Ranges of Models Fit on Experimental Data under {window} Window Strategy"
+            f"Parameter Ranges of Models Fit on {data_type} Data under {window} Window Strategy"
         )
         facet_grid.figure.patch.set_alpha(0.0)
         facet_grid.tight_layout()
@@ -152,7 +146,29 @@ def plot_parameter_ranges(data_dir, df):
         plt.close()
 
 
-def plot_dynamics(save_loc, df):
+def save_parameter_ranges(data_dir, df):
+    df_param = pd.melt(
+        df,
+        id_vars=["Model", "Exponential Growth Window Strategy", "Experiment"],
+        value_vars=[x for x in df.columns if x[0] == "$"],
+        var_name="Parameter",
+        value_name="Value",
+    )
+    df_param = df_param.reset_index(drop=True).dropna().drop_duplicates()
+
+    df_range = (
+        df_param[["Exponential Growth Window Strategy", "Model", "Parameter", "Value"]]
+        .groupby(["Exponential Growth Window Strategy", "Model", "Parameter"])
+        .agg(["mean", "min", "max", "std"])
+        .reset_index()
+    )
+    df_range.columns = df_range.columns.to_series().apply(lambda x: " ".join(x))
+    df_range["low"] = df_range["Value mean"] - 2 * df_range["Value std"]
+    df_range["upper"] = df_range["Value mean"] + 2 * df_range["Value std"]
+    df_range.to_csv(f"{data_dir}/parameter_ranges.csv", index=False)
+
+
+def plot_dynamics(save_loc, df, data_type):
     df_dynamic = (
         df[["Exponential Growth Window Strategy", "Model", "Experiment", "Dynamic"]]
         .drop_duplicates()
@@ -173,8 +189,10 @@ def plot_dynamics(save_loc, df):
         aspect=1,
     )
     facet_grid.add_legend()
-    facet_grid.figure.suptitle("Classified Qualitative Interactions")
-    sns.move_legend(facet_grid, loc="center right", bbox_to_anchor = (1.1, 0))
+    facet_grid.set_titles("{col_name}")
+    facet_grid.set_xticklabels(rotation=45)
+    facet_grid.figure.suptitle(f"{data_type} Data Classified Qualitative Interactions")
+    sns.move_legend(facet_grid, loc="center right", bbox_to_anchor=(1.1, 0))
     facet_grid.figure.patch.set_alpha(0.0)
     facet_grid.tight_layout()
     facet_grid.savefig(f"{save_loc}/window_dynamics.png", bbox_inches="tight", dpi=200)
@@ -273,6 +291,7 @@ def main():
     )
     parser.add_argument("-plot", "--plot", type=int, default=0, choices=[0, 1])
     args = parser.parse_args()
+    data_type = args.in_dir.title()
 
     # Check that input data path exists
     if not os.path.exists(f"{args.data_dir}/{args.in_dir}"):
@@ -307,7 +326,7 @@ def main():
             & (df["Model"] != "Ground Truth")
         ]
 
-        plot_dynamics(save_loc, df)
+        plot_dynamics(save_loc, df, data_type)
 
         for model in df["Model"].unique():
             plot_qualitative(
@@ -325,7 +344,8 @@ def main():
         plot_errors(save_loc, df, sns.barplot, "Exponential Growth Window Strategy", "BIC", "Model")
         plot_errors(save_loc, df, sns.barplot, "Exponential Growth Window Strategy", "BIC", None)
 
-        plot_parameter_ranges(save_loc, df)
+        plot_parameter_ranges(save_loc, df, data_type)
+        save_parameter_ranges(save_loc, df)
 
 
 if __name__ == "__main__":

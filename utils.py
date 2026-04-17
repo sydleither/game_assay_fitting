@@ -47,3 +47,10 @@ def get_parameter_names():
         "r_S",
         "r_R",
     ]
+
+
+def get_parameter_ranges(model):
+    if model == "replicator":
+        return [(0.03, 0.05)]*4
+    elif model == "lotka-volterra":
+        return [(0.03, 0.05)]*2 + [(-4e-6, -2e-7)]*4

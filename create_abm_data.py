@@ -1,7 +1,7 @@
 import argparse
 
 from EGT_HAL.config_utils import latin_hybercube_sample, write_config, write_run_scripts
-from utils import get_plate_structure
+from utils import get_parameter_ranges, get_plate_structure
 
 
 def main():
@@ -17,8 +17,6 @@ def main():
     )
     parser.add_argument("-seed", "--seed", type=int, default=42)
     parser.add_argument("-samples", "--num_samples", type=int, default=10)
-    parser.add_argument("-lgr", "--lower_param_range", type=float, default=0.01)
-    parser.add_argument("-ugr", "--upper_param_range", type=float, default=0.099)
     parser.add_argument("-x", "--grid_x", type=int, default=100)
     parser.add_argument("-y", "--grid_y", type=int, default=100)
     parser.add_argument("-m", "--interaction_radius", type=int, default=2)
@@ -28,18 +26,16 @@ def main():
     parser.add_argument("-init", "--init_freq", type=int, default=0.01)
     args = parser.parse_args()
 
-    lpr = args.lower_param_range
-    upr = args.upper_param_range
+    parameter_ranges = get_parameter_ranges("lotka-volterra")
     init_count = args.init_freq * args.grid_x * args.grid_y
 
     # Set interaction parameters
     samples = latin_hybercube_sample(
         args.num_samples,
         ["r_0", "r_1", "A_00", "A_01", "A_10", "A_11"],
-        [0.0, 0.0, 1e-6, -0.0001, -0.0001, -0.0001],
-        [0.1, 0.1, 0.0, 0.0001, 0.0001, 0.0],
+        [x[0] for x in parameter_ranges],
+        [x[1] for x in parameter_ranges],
         [False] * 6,
-        rnd=6,
         seed=args.seed,
     )
 

@@ -8,7 +8,7 @@ from EGT_HAL.config_utils import latin_hybercube_sample
 from fitting.odeModels import create_model, get_models
 from game_assay.game_analysis import calculate_growth_rates, calculate_payoffs
 from run_game_assay import plot_counts, plot_fits, plot_freqdepend_fit
-from utils import get_plate_structure, solver_kws
+from utils import get_parameter_ranges, get_plate_structure, solver_kws
 
 
 def main():
@@ -19,34 +19,28 @@ def main():
     parser.add_argument("-seed", "--seed", type=int, default=42)
     parser.add_argument("-samples", "--num_samples", type=int, default=10)
     parser.add_argument("-noise", "--noise", type=int, choices=[0, 1], default=0)
-    parser.add_argument("-lpr", "--lower_param_range", type=float, default=0.0)
-    parser.add_argument("-upr", "--upper_param_range", type=float, default=0.05)
     parser.add_argument("-end", "--end_time", type=int, default=80)
     parser.add_argument("-density", "--init_density", type=int, default=1000)
     args = parser.parse_args()
 
-    lpr = args.lower_param_range
-    upr = args.upper_param_range
-
     # Set interaction parameters
+    parameter_ranges = get_parameter_ranges(args.model)
     if args.model == "replicator":
         samples = latin_hybercube_sample(
             args.num_samples,
             ["p_SS", "p_SR", "p_RS", "p_RR"],
-            [lpr, lpr, lpr, lpr],
-            [upr, upr, upr, upr],
+            [x[0] for x in parameter_ranges],
+            [x[1] for x in parameter_ranges],
             [False, False, False, False],
-            rnd=4,
             seed=args.seed,
         )
     else:
         samples = latin_hybercube_sample(
             args.num_samples,
             ["r_S", "r_R", "a_SS", "a_SR", "a_RS", "a_RR"],
-            [0.0, 0.0, -0.0001, -0.0001, -0.0001, -0.0001],
-            [0.2, 0.2, 0.0, 0.0001, 0.0001, 0.0],
+            [x[0] for x in parameter_ranges],
+            [x[1] for x in parameter_ranges],
             [False, False, False, False, False, False],
-            rnd=6,
             seed=args.seed,
         )
 

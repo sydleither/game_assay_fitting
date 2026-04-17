@@ -10,7 +10,7 @@ from compare_fits import get_fit_df, plot_errors_facet, label_qualitative_dynami
 from utils import get_parameter_names
 
 
-def plot_qualitative(data_dir, df):
+def plot_accuracy(data_dir, df):
     df = df[["Experiment", "Model", "Dynamic"]].copy().drop_duplicates()
     df = df.sort_values(by=["Model", "Experiment"])
     models = df[df["Model"] != "Ground Truth"]["Model"].unique()
@@ -57,7 +57,7 @@ def plot_qualitative(data_dir, df):
 
 def qualitative_results(save_loc, df):
     df = label_qualitative_dynamics(df)
-    plot_qualitative(save_loc, df)
+    plot_accuracy(save_loc, df)
 
 
 def quantitative_results(save_loc, df):
