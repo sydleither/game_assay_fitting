@@ -51,6 +51,16 @@ def get_parameter_names():
 
 def get_parameter_ranges(model):
     if model == "replicator":
-        return [(0.03, 0.05)]*4
+        return [(0.03, 0.05)] * 4
     elif model == "lotka-volterra":
-        return [(0.03, 0.05)]*2 + [(-4e-6, -2e-7)]*4
+        return [(0.03, 0.05)] * 2 + [(-4e-6, -2e-7)] * 4
+
+
+def get_colors():
+    return {
+        "Sensitive Wins": "#4C956C",
+        "Coexistence": "#C28367",
+        "Bistability": "#047495",
+        "Resistant Wins": "#EF7C8E",
+        "Extinction": "#767567",
+    }

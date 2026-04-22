@@ -84,10 +84,7 @@ def quantitative_results(save_loc, df):
 
     # Plot differences
     df_diff = df[df["Model"] != "Ground Truth"]
-    plot_errors_facet(save_loc, df_diff, sns.barplot, "Model", "Difference", None, "Parameter")
-    plot_errors_facet(save_loc, df, sns.barplot, "Model", "Value", None, "Parameter")
-    plot_errors_facet(save_loc, df, sns.scatterplot, "Model", "Value", None, "Parameter")
-    plot_errors_facet(save_loc, df, sns.scatterplot, "Model", "Value", "Experiment", "Parameter")
+    plot_errors_facet(save_loc, df_diff, sns.boxplot, "Model", "Difference", None, "Parameter")
 
 
 def main():

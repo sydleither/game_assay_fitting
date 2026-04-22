@@ -136,6 +136,8 @@ def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR):
     if np.any(np.isnan([r_S, r_R, a_SS, a_SR, a_RS, a_RR])):
         return np.nan
     denom = a_SS * a_RR - a_SR * a_RS
+    if denom == 0:
+        return "Neutrality"
     mix = ((a_SR * r_R - a_RR * r_S) / denom, (a_RS * r_S - a_SS * r_R) / denom)
     if mix[0] < 0 or mix[1] < 0:
         mix_stable = np.nan

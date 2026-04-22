@@ -1,8 +1,11 @@
 import argparse
 import os
 
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+from scipy.stats import mannwhitneyu
 import seaborn as sns
 from sklearn.metrics import accuracy_score
 
@@ -20,7 +23,7 @@ from game_assay.game_analysis_utils import (
     optimize_growth_rate_window_per_well,
 )
 from run_game_assay import plot_fits, plot_freqdepend_fit
-from utils import get_cell_types
+from utils import get_cell_types, get_colors
 
 
 def plot_agreement(data_dir, df):
@@ -30,7 +33,6 @@ def plot_agreement(data_dir, df):
             columns="Exponential Growth Window Strategy 2",
             values="Agreement",
         )
-
         fig, ax = plt.subplots(figsize=(6, 6))
         sns.heatmap(df_model_agr, annot=True, vmin=0, vmax=1, ax=ax)
         ax.set_title(f"Agreement Between Exponential Growth Window Strategys for {model}")
@@ -78,16 +80,6 @@ def plot_agreement(data_dir, df):
     df_agr = pd.concat(df_agr, ignore_index=True)
     df_agr = df_agr.sort_values(by="Model")
     df_agr["Exponential Growth Window Strategy"] = df_agr["Exponential Growth Window Strategy 1"]
-    fig, ax = plt.subplots(figsize=(5, 5))
-    sns.barplot(df_agr, x="Exponential Growth Window Strategy", y="Agreement", hue="Model", ax=ax)
-    ax.tick_params("x", rotation=45)
-    fig.suptitle(
-        "Agreement in Qualitative Interaction Classification\nbetween Window Strategies and Models"
-    )
-    fig.patch.set_alpha(0.0)
-    fig.tight_layout()
-    fig.savefig(f"{data_dir}/agreement_aggregated.png", bbox_inches="tight", dpi=200)
-    plt.close()
 
 
 def plot_parameter_ranges(data_dir, df, data_type):
@@ -146,28 +138,6 @@ def plot_parameter_ranges(data_dir, df, data_type):
         plt.close()
 
 
-def save_parameter_ranges(data_dir, df):
-    df_param = pd.melt(
-        df,
-        id_vars=["Model", "Exponential Growth Window Strategy", "Experiment"],
-        value_vars=[x for x in df.columns if x[0] == "$"],
-        var_name="Parameter",
-        value_name="Value",
-    )
-    df_param = df_param.reset_index(drop=True).dropna().drop_duplicates()
-
-    df_range = (
-        df_param[["Exponential Growth Window Strategy", "Model", "Parameter", "Value"]]
-        .groupby(["Exponential Growth Window Strategy", "Model", "Parameter"])
-        .agg(["mean", "min", "max", "std"])
-        .reset_index()
-    )
-    df_range.columns = df_range.columns.to_series().apply(lambda x: " ".join(x))
-    df_range["low"] = df_range["Value mean"] - 2 * df_range["Value std"]
-    df_range["upper"] = df_range["Value mean"] + 2 * df_range["Value std"]
-    df_range.to_csv(f"{data_dir}/parameter_ranges.csv", index=False)
-
-
 def plot_dynamics(save_loc, df, data_type):
     df_dynamic = (
         df[["Exponential Growth Window Strategy", "Model", "Experiment", "Dynamic"]]
@@ -176,13 +146,20 @@ def plot_dynamics(save_loc, df, data_type):
         .count()
         .reset_index()
     )
+    dynamics = list(get_colors().keys())
+    n_colors = len(dynamics)
+    palette_list = [get_colors()[d] for d in dynamics]
+    custom_cmap = mcolors.ListedColormap(palette_list)
+    dynamics_to_int = {s: i for i, s in enumerate(dynamics)}
+
     facet_grid = sns.displot(
         df_dynamic,
         col="Model",
         x="Exponential Growth Window Strategy",
         weights="Experiment",
         hue="Dynamic",
-        hue_order=sorted(df_dynamic["Dynamic"].unique()),
+        hue_order=dynamics,
+        palette=get_colors(),
         kind="hist",
         multiple="stack",
         height=4,
@@ -191,12 +168,81 @@ def plot_dynamics(save_loc, df, data_type):
     facet_grid.add_legend()
     facet_grid.set_titles("{col_name}")
     facet_grid.set_xticklabels(rotation=45)
-    facet_grid.figure.suptitle(f"{data_type} Data Classified Qualitative Interactions")
+    facet_grid.figure.suptitle(f"Classified Qualitative Interactions of {data_type} Data")
     sns.move_legend(facet_grid, loc="center right", bbox_to_anchor=(1.1, 0))
     facet_grid.figure.patch.set_alpha(0.0)
     facet_grid.tight_layout()
     facet_grid.savefig(f"{save_loc}/window_dynamics.png", bbox_inches="tight", dpi=200)
     plt.close()
+
+    df = df[
+        ["Experiment", "Model", "Exponential Growth Window Strategy", "Dynamic"]
+    ].drop_duplicates()
+    models = sorted(df["Model"].unique())
+    df["Experiment"] = df["Experiment"].map({s: i for i, s in enumerate(df["Experiment"].unique())})
+    fig, ax = plt.subplots(1, len(models), figsize=(4 * len(models), 4))
+    for i, model in enumerate(models):
+        df_model = (
+            df[df["Model"] == model]
+            .pivot(
+                index="Experiment", columns="Exponential Growth Window Strategy", values="Dynamic"
+            )
+            .replace(dynamics_to_int)
+        )
+        sns.heatmap(
+            df_model,
+            cmap=custom_cmap,
+            ax=ax[i],
+            vmin=-0.5,
+            vmax=n_colors - 0.5,
+            cbar=(i == len(models) - 1),
+            cbar_kws={"ticks": range(n_colors), "label": "Dynamics"}
+            if i == len(models) - 1
+            else None,
+        )
+        ax[i].set_title(model)
+        ax[i].tick_params("x", rotation=45)
+    last_cbar = ax[-1].collections[0].colorbar
+    if last_cbar:
+        last_cbar.set_ticklabels(dynamics)
+        last_cbar.ax.invert_yaxis()
+    fig.suptitle("Experiment Classifications across Models and Windows")
+    fig.patch.set_alpha(0.0)
+    fig.tight_layout()
+    fig.savefig(f"{save_loc}/window_dynamics_matched.png", bbox_inches="tight", dpi=200)
+    plt.close()
+
+
+def print_stats(df):
+    df_param = pd.melt(
+        df,
+        id_vars=["Model", "Exponential Growth Window Strategy", "Experiment"],
+        value_vars=[x for x in df.columns if x[0] == "$"],
+        var_name="Parameter",
+        value_name="Value",
+    )
+    df_param = df_param.reset_index(drop=True).dropna().drop_duplicates()
+    df_param = df_param.drop(["Experiment"], axis=1)
+    variances = (
+        df_param.groupby(["Parameter", "Model", "Exponential Growth Window Strategy"])["Value"]
+        .std()
+        .reset_index()
+    )
+    print(variances.loc[variances.groupby(["Model", "Parameter"])["Value"].idxmin()])
+    exit()
+    # models = df["Model"].unique()
+    # for window in df["Exponential Growth Window Strategy"].unique():
+    #     df_win = df[df["Exponential Growth Window Strategy"] == window][
+    #         ["Experiment", "Model", "Dynamic"]
+    #     ].drop_duplicates()
+    #     print(f"*** {window} Window ***")
+    #     for i in range(len(models)):
+    #         for j in range(i + 1, len(models)):
+    #             _, p = mannwhitneyu(
+    #                 df_win[df_win["Model"] == models[i]]["Dynamic"].values,
+    #                 df_win[df_win["Model"] == models[j]]["Dynamic"].values,
+    #             )
+    #             print(f"\t{models[i]} vs {models[j]}: {p}")
 
 
 def get_ground_truth(in_data_dir, df):
@@ -321,10 +367,8 @@ def main():
     # Save results
     if args.plot == 1:
         df = get_growth_rates(save_loc, f"{args.data_dir}/{args.in_dir}")
-        df = df[
-            (df["Exponential Growth Window Strategy"] != "Ground Truth")
-            & (df["Model"] != "Ground Truth")
-        ]
+
+        print_stats(df)
 
         plot_dynamics(save_loc, df, data_type)
 
@@ -337,15 +381,18 @@ def main():
             )
         plot_agreement(save_loc, df)
 
+        plot_parameter_ranges(save_loc, df, data_type)
+
+        df = df[
+            (df["Exponential Growth Window Strategy"] != "Ground Truth")
+            & (df["Model"] != "Ground Truth")
+        ]
         plot_errors(
             save_loc, df, sns.barplot, "Exponential Growth Window Strategy", "Error", "Model"
         )
         plot_errors(save_loc, df, sns.barplot, "Exponential Growth Window Strategy", "Error", None)
         plot_errors(save_loc, df, sns.barplot, "Exponential Growth Window Strategy", "BIC", "Model")
         plot_errors(save_loc, df, sns.barplot, "Exponential Growth Window Strategy", "BIC", None)
-
-        plot_parameter_ranges(save_loc, df, data_type)
-        save_parameter_ranges(save_loc, df)
 
 
 if __name__ == "__main__":

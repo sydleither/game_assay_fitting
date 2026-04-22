@@ -19,9 +19,12 @@ def main():
     parser.add_argument("-model", "--model", type=str, choices=list(get_models()))
     parser.add_argument("-seed", "--seed", type=int, default=42)
     parser.add_argument("-samples", "--num_samples", type=int, default=50)
-    parser.add_argument("-noise", "--noise", type=int, choices=[0, 1], default=0)
+    parser.add_argument("-noise", "--noise", type=float, default=0.0)
     parser.add_argument("-end", "--end_time", type=int, default=80)
     args = parser.parse_args()
+
+    if args.noise > 0.25:
+        raise ValueError("Provide noise (sigma=x*noise) <= 0.25")
 
     # Set interaction parameters
     parameter_ranges = get_parameter_ranges(args.model)
@@ -71,8 +74,10 @@ def main():
                     model_df = ode_model.resultsDf.reset_index(drop=True)
                     model_df = model_df[model_df["Time"] % 4 == 0]
                     # Add noise to results, if specified
-                    if args.noise == 1:
-                        raise ValueError("Noise not yet implemented")
+                    if args.noise > 0.0:
+                        model_df["S"] = model_df["S"].apply(lambda x: random.gauss(x, args.noise*x))
+                        model_df["R"] = model_df["R"].apply(lambda x: random.gauss(x, args.noise*x))
+                        model_df["TumourSize"] = model_df["S"] + model_df["R"]
                     # Format ODE results
                     model_df["RowId"] = row
                     model_df["ColumnId"] = colids[i]
