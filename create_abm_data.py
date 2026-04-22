@@ -17,7 +17,7 @@ def main():
         default="java -cp build/:lib/* SpatialEGT.SpatialEGT",
     )
     parser.add_argument("-seed", "--seed", type=int, default=42)
-    parser.add_argument("-samples", "--num_samples", type=int, default=50)
+    parser.add_argument("-samples", "--num_samples", type=int, default=20)
     parser.add_argument("-x", "--grid_x", type=int, default=100)
     parser.add_argument("-y", "--grid_y", type=int, default=100)
     parser.add_argument("-m", "--interaction_radius", type=int, default=2)
