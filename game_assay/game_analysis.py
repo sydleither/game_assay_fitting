@@ -115,13 +115,14 @@ def calculate_growth_rates(
     cell_type_list=None,
     rewrite=False,
 ):
-    gr_path = os.path.join(
-        data_dir,
-        exp_dir,
-        "%s_growth_rate_df_processed.csv" % exp_dir.split("/")[-1],
-    )
-    if os.path.exists(gr_path) and not rewrite:
-        return pd.read_csv(gr_path)
+    if data_dir is not None:
+        gr_path = os.path.join(
+            data_dir,
+            exp_dir,
+            "%s_growth_rate_df_processed.csv" % exp_dir.split("/")[-1],
+        )
+        if os.path.exists(gr_path) and not rewrite:
+            return pd.read_csv(gr_path)
 
     if cell_type_list is None:
         raise ValueError("Set the cell type list.")
@@ -193,7 +194,8 @@ def calculate_growth_rates(
             }
         )
     growth_rate_df = pd.DataFrame(tmp_list)
-    growth_rate_df.to_csv(gr_path, index=False)
+    if data_dir is not None:
+        growth_rate_df.to_csv(gr_path, index=False)
     return growth_rate_df
 
 

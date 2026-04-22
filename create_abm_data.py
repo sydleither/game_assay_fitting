@@ -1,4 +1,5 @@
 import argparse
+import random
 
 from EGT_HAL.config_utils import latin_hybercube_sample, write_config, write_run_scripts
 from utils import get_parameter_ranges, get_plate_structure
@@ -16,18 +17,16 @@ def main():
         default="java -cp build/:lib/* SpatialEGT.SpatialEGT",
     )
     parser.add_argument("-seed", "--seed", type=int, default=42)
-    parser.add_argument("-samples", "--num_samples", type=int, default=10)
+    parser.add_argument("-samples", "--num_samples", type=int, default=50)
     parser.add_argument("-x", "--grid_x", type=int, default=100)
     parser.add_argument("-y", "--grid_y", type=int, default=100)
     parser.add_argument("-m", "--interaction_radius", type=int, default=2)
     parser.add_argument("-n", "--reproduction_radius", type=int, default=2)
     parser.add_argument("-freq", "--write_freq", type=int, default=4)
     parser.add_argument("-end", "--end_time", type=int, default=80)
-    parser.add_argument("-init", "--init_freq", type=int, default=0.01)
     args = parser.parse_args()
 
     parameter_ranges = get_parameter_ranges("lotka-volterra")
-    init_count = args.init_freq * args.grid_x * args.grid_y
 
     # Set interaction parameters
     samples = latin_hybercube_sample(
@@ -51,6 +50,7 @@ def main():
             for i, fs in enumerate(seeding):
                 for j, row in enumerate(rowids):
                     save_loc = f"{data_dir}/{s}/{plate}/{row}{colids[i]}"
+                    init_count = random.uniform(0.08, 0.12) * args.grid_x * args.grid_y
                     write_config(
                         save_loc=save_loc,
                         seed=j,

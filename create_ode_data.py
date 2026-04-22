@@ -1,6 +1,7 @@
 import argparse
 from datetime import date
 import os
+import random
 
 import pandas as pd
 
@@ -17,10 +18,9 @@ def main():
     parser.add_argument("-dir", "--data_dir", type=str)
     parser.add_argument("-model", "--model", type=str, choices=list(get_models()))
     parser.add_argument("-seed", "--seed", type=int, default=42)
-    parser.add_argument("-samples", "--num_samples", type=int, default=10)
+    parser.add_argument("-samples", "--num_samples", type=int, default=50)
     parser.add_argument("-noise", "--noise", type=int, choices=[0, 1], default=0)
     parser.add_argument("-end", "--end_time", type=int, default=80)
-    parser.add_argument("-density", "--init_density", type=int, default=1000)
     args = parser.parse_args()
 
     # Set interaction parameters
@@ -63,16 +63,16 @@ def main():
                     ode_model = create_model(args.model)
                     for param_name, param_val in sample.items():
                         ode_model.paramDic[param_name] = param_val
-                    ode_model.paramDic["S0"] = fs * args.init_density
-                    ode_model.paramDic["R0"] = (1 - fs) * args.init_density
+                    density = random.randint(570, 610)
+                    ode_model.paramDic["S0"] = fs * density
+                    ode_model.paramDic["R0"] = (1 - fs) * density
                     ode_model.SetParams(**ode_model.paramDic)
                     ode_model.Simulate(treatmentScheduleList=times, **solver_kws)
                     model_df = ode_model.resultsDf.reset_index(drop=True)
                     model_df = model_df[model_df["Time"] % 4 == 0]
                     # Add noise to results, if specified
                     if args.noise == 1:
-                        print(model_df) #TODO mod both freq and count column the same
-                        exit()
+                        raise ValueError("Noise not yet implemented")
                     # Format ODE results
                     model_df["RowId"] = row
                     model_df["ColumnId"] = colids[i]

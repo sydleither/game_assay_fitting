@@ -12,7 +12,7 @@ from fitting.fittingUtils import residual_multipleConditions
 from fitting.myUtils import ExtractTreatmentFromDf
 from fitting.odeModels import create_model, get_models
 from game_assay.game_analysis import calculate_counts, calculate_growth_rates
-from game_assay.game_analysis_utils import calculate_bic
+from game_assay.game_analysis_utils import calculate_bic, optimize_growth_rate_window_per_exp
 from utils import get_cell_types, optimiser_kws, solver_kws
 
 
@@ -267,7 +267,9 @@ def main():
             continue
         print(exp_name)
         counts_df = calculate_counts(args.data_dir, exp_name)
-        growth_rate_df = calculate_growth_rates(args.data_dir, exp_name, counts_df)
+        counts_df = optimize_growth_rate_window_per_exp(counts_df)
+        cell_types = get_cell_types(exp_name)
+        growth_rate_df = calculate_growth_rates(None, exp_name, counts_df, cell_type_list=cell_types)
         fit(
             args.data_dir,
             exp_name,

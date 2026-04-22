@@ -486,7 +486,7 @@ def optimize_growth_rate_window_per_exp(df):
             for cell_type in df_well["CellType"].unique():
                 df_ct = df_well[df_well["CellType"] == cell_type]
                 _, fit = optimize_growth_rate_window_per_cell(
-                    df_ct, return_fit_df=True, filter_by_dominant_sign=False
+                    df_ct.copy(), return_fit_df=True, filter_by_dominant_sign=False
                 )
                 fits.append(fit)
     fits = pd.concat(fits, ignore_index=True)

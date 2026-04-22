@@ -56,7 +56,6 @@ python3 exponential_growth_window.py -p 1
 python3 create_ode_data.py -dir data/ode_egt -model replicator
 python3 fit_ode.py -dir data/ode_egt -model replicator
 python3 fit_ode.py -dir data/ode_egt -model "lotka-volterra"
-python3 compare_fits.py -dir data/ode_egt
 python3 compare_estimations.py -dir data/ode_egt
 ```
 ### On density-dependent ODE data
@@ -64,7 +63,6 @@ python3 compare_estimations.py -dir data/ode_egt
 python3 create_ode_data.py -dir data/ode_lv -model "lotka-volterra"
 python3 fit_ode.py -dir data/ode_lv -model replicator
 python3 fit_ode.py -dir data/ode_lv -model "lotka-volterra"
-python3 compare_fits.py -dir data/ode_lv
 python3 compare_estimations.py -dir data/ode_lv
 ```
 ### On spatial density-dependent data

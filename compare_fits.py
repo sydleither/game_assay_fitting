@@ -148,12 +148,12 @@ def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR):
             return "Sensitive Wins"
         if all_1_stable:
             return "Resistant Wins"
+        return "Extinction"
     else:
         if mix_stable:
             return "Coexistence"
         if not mix_stable:
             return "Bistability"
-    return "Unknown"
 
 
 def label_qualitative_dynamics(df, keys=["Model", "Experiment"]):
