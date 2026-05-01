@@ -23,10 +23,10 @@ from game_assay.game_analysis_utils import (
     optimize_growth_rate_window_per_well,
 )
 from run_game_assay import plot_fits, plot_freqdepend_fit
-from utils import get_cell_types, get_colors
+from utils import get_cell_types, get_colors, label_data_type
 
 
-def plot_agreement(data_dir, df):
+def plot_agreement(data_dir, df, data_type):
     def heatmap(df_model_agr, model):
         df_model_agr = df_model_agr.pivot(
             index="Exponential Growth Window Strategy 1",
@@ -78,8 +78,24 @@ def plot_agreement(data_dir, df):
         df_agr.append(df_model_agr)
 
     df_agr = pd.concat(df_agr, ignore_index=True)
-    df_agr = df_agr.sort_values(by="Model")
-    df_agr["Exponential Growth Window Strategy"] = df_agr["Exponential Growth Window Strategy 1"]
+    if "Ground Truth" in df_agr["Exponential Growth Window Strategy 1"].unique():
+        df_agr = df_agr.sort_values(by="Model")
+        df_agr["Exponential Growth Window Strategy"] = df_agr[
+            "Exponential Growth Window Strategy 1"
+        ]
+        df_agr = df_agr[df_agr["Exponential Growth Window Strategy 2"] == "Ground Truth"]
+        fig, ax = plt.subplots(figsize=(5, 4))
+        sns.barplot(
+            df_agr, x="Model", y="Agreement", hue="Exponential Growth Window Strategy", ax=ax
+        )
+        sns.move_legend(ax, "lower center", bbox_to_anchor=(0.5, 1))
+        ax.tick_params("x", rotation=45)
+        ax.set(ylabel="Qualitative Interaction\nClassification Accuracy")
+        fig.suptitle(f"Exponential Growth Window Accuracy\non {data_type} data", y=1.33)
+        fig.patch.set_alpha(0.0)
+        fig.tight_layout()
+        fig.savefig(f"{data_dir}/accuracy_{data_type}.png", bbox_inches="tight", dpi=200)
+        plt.close()
 
 
 def plot_parameter_ranges(data_dir, df, data_type):
@@ -214,6 +230,7 @@ def plot_dynamics(save_loc, df, data_type):
 
 
 def print_stats(df):
+    # Parameter variance
     df_param = pd.melt(
         df,
         id_vars=["Model", "Exponential Growth Window Strategy", "Experiment"],
@@ -229,20 +246,6 @@ def print_stats(df):
         .reset_index()
     )
     print(variances.loc[variances.groupby(["Model", "Parameter"])["Value"].idxmin()])
-    exit()
-    # models = df["Model"].unique()
-    # for window in df["Exponential Growth Window Strategy"].unique():
-    #     df_win = df[df["Exponential Growth Window Strategy"] == window][
-    #         ["Experiment", "Model", "Dynamic"]
-    #     ].drop_duplicates()
-    #     print(f"*** {window} Window ***")
-    #     for i in range(len(models)):
-    #         for j in range(i + 1, len(models)):
-    #             _, p = mannwhitneyu(
-    #                 df_win[df_win["Model"] == models[i]]["Dynamic"].values,
-    #                 df_win[df_win["Model"] == models[j]]["Dynamic"].values,
-    #             )
-    #             print(f"\t{models[i]} vs {models[j]}: {p}")
 
 
 def get_ground_truth(in_data_dir, df):
@@ -337,7 +340,9 @@ def main():
     )
     parser.add_argument("-plot", "--plot", type=int, default=0, choices=[0, 1])
     args = parser.parse_args()
-    data_type = args.in_dir.title()
+
+    # Set data type
+    data_type = label_data_type(args.in_dir)
 
     # Check that input data path exists
     if not os.path.exists(f"{args.data_dir}/{args.in_dir}"):
@@ -372,21 +377,28 @@ def main():
 
         plot_dynamics(save_loc, df, data_type)
 
-        for model in df["Model"].unique():
+        models = df["Model"].unique()
+        for model in models:
+            if model == "Ground Truth":
+                continue
+            df_model = df.copy()
+            if "Ground Truth" in models:
+                df_model.loc[df_model["Model"] == "Ground Truth", "Model"] = model
+                df = pd.concat(
+                    [df_model[df_model["Exponential Growth Window Strategy"] == "Ground Truth"], df]
+                )
             plot_qualitative(
                 save_loc,
-                df[df["Model"] == model],
+                df_model[df_model["Model"] == model],
                 focal_col="Exponential Growth Window Strategy",
                 sub_col=model,
             )
-        plot_agreement(save_loc, df)
 
+        df = df[df["Model"] != "Ground Truth"]
+        plot_agreement(save_loc, df, data_type)
+
+        df = df[df["Exponential Growth Window Strategy"] != "Ground Truth"]
         plot_parameter_ranges(save_loc, df, data_type)
-
-        df = df[
-            (df["Exponential Growth Window Strategy"] != "Ground Truth")
-            & (df["Model"] != "Ground Truth")
-        ]
         plot_errors(
             save_loc, df, sns.barplot, "Exponential Growth Window Strategy", "Error", "Model"
         )

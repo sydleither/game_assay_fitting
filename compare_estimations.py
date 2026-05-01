@@ -7,10 +7,10 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix
 
 from compare_fits import get_fit_df, plot_errors_facet, label_qualitative_dynamics
-from utils import get_parameter_names
+from utils import get_parameter_names, label_data_type
 
 
-def plot_accuracy(data_dir, df):
+def plot_accuracy(data_dir, df, data_type):
     df = df[["Experiment", "Model", "Dynamic"]].copy().drop_duplicates()
     df = df.sort_values(by=["Model", "Experiment"])
     models = df[df["Model"] != "Ground Truth"]["Model"].unique()
@@ -26,38 +26,52 @@ def plot_accuracy(data_dir, df):
         )
         confusion_matrices.append(mat)
 
+    # heatmaps
     fig, ax = plt.subplots(
         ncols=len(models) + 1,
         gridspec_kw=dict(width_ratios=[1] * len(models) + [0.1]),
         figsize=(4 * len(models), 4),
     )
+    accuracies = []
     for i in range(len(models)):
+        acc = np.trace(confusion_matrices[i]) / num_experiments
+        accuracies.append({"Model": models[i], "Accuracy": acc})
         sns.heatmap(
             confusion_matrices[i],
             annot=True,
             xticklabels=labels,
             yticklabels=labels if i == 0 else [],
             vmin=0,
-            vmax=num_experiments,
+            vmax=num_experiments // 2,
             cbar=False,
             ax=ax[i],
         )
         ax[i].set(
             xlabel=models[i],
             ylabel="Ground Truth",
-            title=f"Accuracy: {np.trace(confusion_matrices[i]) / num_experiments:5.3f}",
+            title=f"Accuracy: {acc:5.3f}",
         )
     fig.colorbar(ax[1].collections[0], cax=ax[-1])
     ax[-1].set(ylabel="Number of Experiments")
-    fig.suptitle("Accuracy of each Model")
+    fig.suptitle(f"Qualitative Interaction Classification Accuracy for {data_type} Data")
     fig.patch.set_alpha(0.0)
-    fig.savefig(f"{data_dir}/accuracy_confmat.png", bbox_inches="tight", dpi=200)
+    fig.savefig(f"{data_dir}/accuracy_confmat_{data_type}.png", bbox_inches="tight", dpi=200)
+    plt.close()
+
+    # barplot
+    fig, ax = plt.subplots(figsize=(4, 4))
+    sns.barplot(pd.DataFrame(accuracies), x="Model", y="Accuracy", color="#9a0eea", ax=ax)
+    ax.set(title=f"Qualitative Interaction Classification Accuracy\nfor {data_type} Data")
+    fig.patch.set_alpha(0.0)
+    fig.tight_layout()
+    fig.savefig(f"{data_dir}/accuracy_{data_type}.png", bbox_inches="tight", dpi=200)
     plt.close()
 
 
-def qualitative_results(save_loc, df):
+
+def qualitative_results(save_loc, df, data_type):
     df = label_qualitative_dynamics(df)
-    plot_accuracy(save_loc, df)
+    plot_accuracy(save_loc, df, data_type)
 
 
 def quantitative_results(save_loc, df):
@@ -98,10 +112,11 @@ def main():
     gt_df = pd.read_csv(f"{args.data_dir}/ground_truth.csv")
     gt_df["Model"] = "Ground Truth"
     df = pd.concat([fit_df, gt_df])
+    data_type = label_data_type(args.data_dir)
 
     # Save results
     quantitative_results(args.data_dir, df)
-    qualitative_results(args.data_dir, df)
+    qualitative_results(args.data_dir, df, data_type)
 
 
 if __name__ == "__main__":

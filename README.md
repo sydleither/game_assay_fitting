@@ -66,6 +66,19 @@ python3 fit_ode.py -dir data/ode_lv -model replicator
 python3 fit_ode.py -dir data/ode_lv -model "lotka-volterra"
 python3 compare_estimations.py -dir data/ode_lv
 ```
+### On noisy ODE data
+```
+python3 create_ode_data.py -dir data/ode_egt_noisy -model replicator
+python3 fit_ode.py -dir data/ode_egt_noisy -model replicator
+python3 fit_ode.py -dir data/ode_egt_noisy -model "lotka-volterra"
+python3 compare_estimations.py -dir data/ode_egt_noisy
+```
+```
+python3 create_ode_data.py -dir data/ode_lv_noisy -model "lotka-volterra"
+python3 fit_ode.py -dir data/ode_lv_noisy -model replicator
+python3 fit_ode.py -dir data/ode_lv_noisy -model "lotka-volterra"
+python3 compare_estimations.py -dir data/ode_lv_noisy
+```
 ### On spatial data
 ```
 python3 create_abm_data.py -dir data/abm_strong -m 2 -n 2

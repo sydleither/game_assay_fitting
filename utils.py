@@ -63,4 +63,13 @@ def get_colors():
         "Bistability": "#047495",
         "Resistant Wins": "#EF7C8E",
         "Extinction": "#767567",
+        "Neutrality": "#767567"
     }
+
+
+def label_data_type(data_dir):
+    if "ode_egt" in data_dir:
+        return "Exponential Growth ODE"
+    if "ode_lv" in data_dir:
+        return "Lotka-Volterra ODE"
+    return data_dir.replace("data/", "").title().replace("_", " ")

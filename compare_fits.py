@@ -129,7 +129,7 @@ def classify_game(a, b, c, d):
         return "Bistability"
     if c > a and d > b:
         return "Resistant Wins"
-    return "Unknown"
+    return "Neutrality"
 
 
 def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR):
@@ -150,7 +150,7 @@ def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR):
             return "Sensitive Wins"
         if all_1_stable:
             return "Resistant Wins"
-        return "Extinction"
+        return "Unbounded Growth"
     else:
         if mix_stable:
             return "Coexistence"

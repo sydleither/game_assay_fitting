@@ -64,10 +64,10 @@ class LotkaVolterra(ODEModel):
             **self.paramDic,
             "r_S": 0.1,
             "r_R": 0.1,
-            "a_SR": 1e-4,
-            "a_SS": -1e-4,
-            "a_RS": 1e-4,
-            "a_RR": -1e-4,
+            "a_SR": 1e-6,
+            "a_SS": -2e-5,
+            "a_RS": 1e-6,
+            "a_RR": -2e-5,
             "S0": 100,
             "R0": 100,
         }
@@ -93,12 +93,12 @@ class LotkaVolterra(ODEModel):
 
     def get_params(self):
         params = Parameters()
-        params.add("r_S", value=0.1, min=0, max=0.33, vary=True)
-        params.add("r_R", value=0.1, min=0, max=0.33, vary=True)
-        params.add("a_SS", value=-1e-4, min=-1e-2, max=0, vary=True)
-        params.add("a_RR", value=-1e-4, min=-1e-2, max=0, vary=True)
-        params.add("a_SR", value=1e-4, min=-1e-2, max=1e-2, vary=True)
-        params.add("a_RS", value=1e-4, min=-1e-2, max=1e-2, vary=True)
+        params.add("r_S", value=0.05, min=0, max=0.1, vary=True)
+        params.add("r_R", value=0.05, min=0, max=0.1, vary=True)
+        params.add("a_SS", value=-2e-5, min=-1e-2, max=0, vary=True)
+        params.add("a_RR", value=-2e-5, min=-1e-2, max=0, vary=True)
+        params.add("a_SR", value=1e-6, min=-1e-2, max=1e-2, vary=True)
+        params.add("a_RS", value=1e-6, min=-1e-2, max=1e-2, vary=True)
         params.add("S0", value=100, min=0, max=1e4, vary=False)
         params.add("R0", value=100, min=0, max=1e4, vary=False)
         return params
