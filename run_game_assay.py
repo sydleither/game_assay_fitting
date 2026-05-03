@@ -242,7 +242,7 @@ def individual_analysis(data_dir, exp_name, rewrite=True, save_plots=True):
     payoff_df = calculate_payoffs(
         data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}", rewrite
     )
-    locations_df = calculate_locations(data_dir, exp_name, counts_df, rewrite)
+    locations_df = calculate_locations(data_dir, exp_name, counts_df, rewrite=True)
 
     if save_plots:
         cell_colors = {sensitive_type: "#4C956C", resistant_type: "#EF7C8E"}

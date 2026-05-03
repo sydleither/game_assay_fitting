@@ -24,6 +24,7 @@ def get_seeding_info(data_dir):
     df["Max Sum"] = df.groupby(["Experiment", "PlateId", "WellId"])["Sum"].transform("max")
     df["Frequency"] = df["Sum"] / df["Max Sum"]
     df = df[df["Time"] == 0]
+    print("Average max density: ", df["Max Sum"].mean(), "+-", df["Max Sum"].sem())
     print("Average initial seeding density: ", df["Sum"].mean(), "+-", df["Sum"].sem())
     print(
         "Average initial seeding frequency: ", df["Frequency"].mean(), "+-", df["Frequency"].sem()

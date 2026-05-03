@@ -68,13 +68,13 @@ python3 compare_estimations.py -dir data/ode_lv
 ```
 ### On noisy ODE data
 ```
-python3 create_ode_data.py -dir data/ode_egt_noisy -model replicator
+python3 create_ode_data.py -dir data/ode_egt_noisy -model replicator -noise 0.2
 python3 fit_ode.py -dir data/ode_egt_noisy -model replicator
 python3 fit_ode.py -dir data/ode_egt_noisy -model "lotka-volterra"
 python3 compare_estimations.py -dir data/ode_egt_noisy
 ```
 ```
-python3 create_ode_data.py -dir data/ode_lv_noisy -model "lotka-volterra"
+python3 create_ode_data.py -dir data/ode_lv_noisy -model "lotka-volterra" -noise 0.2
 python3 fit_ode.py -dir data/ode_lv_noisy -model replicator
 python3 fit_ode.py -dir data/ode_lv_noisy -model "lotka-volterra"
 python3 compare_estimations.py -dir data/ode_lv_noisy

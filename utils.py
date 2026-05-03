@@ -62,7 +62,7 @@ def get_colors():
         "Coexistence": "#C28367",
         "Bistability": "#047495",
         "Resistant Wins": "#EF7C8E",
-        "Extinction": "#767567",
+        "Unbounded Growth": "#767567",
         "Neutrality": "#767567"
     }
 
@@ -72,4 +72,6 @@ def label_data_type(data_dir):
         return "Exponential Growth ODE"
     if "ode_lv" in data_dir:
         return "Lotka-Volterra ODE"
+    if "abm" in data_dir and "_" in data_dir:
+        return data_dir.split("/")[1].split("_")[1].title() + " Spatial Agent-Based Model"
     return data_dir.replace("data/", "").title().replace("_", " ")

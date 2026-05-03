@@ -5,11 +5,12 @@ import random
 
 import pandas as pd
 
+from compare_fits import classify_game, classify_lv_dynamic
 from EGT_HAL.config_utils import latin_hybercube_sample
 from fitting.odeModels import create_model, get_models
 from game_assay.game_analysis import calculate_growth_rates, calculate_payoffs
 from run_game_assay import plot_counts, plot_fits, plot_freqdepend_fit
-from utils import get_parameter_ranges, get_plate_structure, solver_kws
+from utils import get_plate_structure, solver_kws
 
 
 def main():
@@ -18,7 +19,7 @@ def main():
     parser.add_argument("-dir", "--data_dir", type=str)
     parser.add_argument("-model", "--model", type=str, choices=list(get_models()))
     parser.add_argument("-seed", "--seed", type=int, default=42)
-    parser.add_argument("-samples", "--num_samples", type=int, default=50)
+    parser.add_argument("-samples", "--num_samples", type=int, default=100)
     parser.add_argument("-noise", "--noise", type=float, default=0.0)
     parser.add_argument("-end", "--end_time", type=int, default=80)
     args = parser.parse_args()
@@ -27,25 +28,49 @@ def main():
         raise ValueError("Provide noise (sigma=x*noise) <= 0.25")
 
     # Set interaction parameters
-    parameter_ranges = get_parameter_ranges(args.model)
+    clean_samples = []
     if args.model == "replicator":
         samples = latin_hybercube_sample(
             args.num_samples,
             ["p_SS", "p_SR", "p_RS", "p_RR"],
-            [x[0] for x in parameter_ranges],
-            [x[1] for x in parameter_ranges],
+            [0] * 4,
+            [0.1] * 4,
             [False, False, False, False],
             seed=args.seed,
         )
+        for sample in samples:
+            dynamic = classify_game(
+                sample["p_SS"],
+                sample["p_SR"],
+                sample["p_RS"],
+                sample["p_RR"],
+            )
+            if dynamic == "Unknown":
+                continue
+            clean_samples.append(sample)
     else:
+        # 1e-5 = 0.1 / 10000
         samples = latin_hybercube_sample(
             args.num_samples,
             ["r_S", "r_R", "a_SS", "a_SR", "a_RS", "a_RR"],
-            [x[0] for x in parameter_ranges],
-            [x[1] for x in parameter_ranges],
+            [0, 0, -1e-5, -1e-5, -1e-5, -1e-5],
+            [0.1, 0.1, 0, 1e-5, 1e-5, 0],
             [False, False, False, False, False, False],
             seed=args.seed,
         )
+        for sample in samples:
+            dynamic = classify_lv_dynamic(
+                sample["r_S"],
+                sample["r_R"],
+                sample["a_SS"],
+                sample["a_SR"],
+                sample["a_RS"],
+                sample["a_RR"],
+            )
+            if dynamic == "Unbounded Growth" or dynamic == "Neutrality":
+                continue
+            clean_samples.append(sample)
+    samples = clean_samples
 
     # Mimic plate structure
     seeding, colids, rowids = get_plate_structure()
@@ -66,7 +91,7 @@ def main():
                     ode_model = create_model(args.model)
                     for param_name, param_val in sample.items():
                         ode_model.paramDic[param_name] = param_val
-                    density = random.randint(570, 610)
+                    density = random.randint(500, 1000)
                     ode_model.paramDic["S0"] = fs * density
                     ode_model.paramDic["R0"] = (1 - fs) * density
                     ode_model.SetParams(**ode_model.paramDic)
@@ -75,8 +100,12 @@ def main():
                     model_df = model_df[model_df["Time"] % 4 == 0]
                     # Add noise to results, if specified
                     if args.noise > 0.0:
-                        model_df["S"] = model_df["S"].apply(lambda x: random.gauss(x, args.noise*x))
-                        model_df["R"] = model_df["R"].apply(lambda x: random.gauss(x, args.noise*x))
+                        model_df["S"] = model_df["S"].apply(
+                            lambda x: random.gauss(x, args.noise * x)
+                        )
+                        model_df["R"] = model_df["R"].apply(
+                            lambda x: random.gauss(x, args.noise * x)
+                        )
                         model_df["TumourSize"] = model_df["S"] + model_df["R"]
                     # Format ODE results
                     model_df["RowId"] = row
