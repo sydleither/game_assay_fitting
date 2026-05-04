@@ -1,6 +1,7 @@
 import argparse
 import random
 
+from compare_fits import classify_lv_dynamic
 from EGT_HAL.config_utils import latin_hybercube_sample, write_config, write_run_scripts
 from utils import get_plate_structure
 
@@ -35,6 +36,20 @@ def main():
         [False] * 6,
         seed=args.seed,
     )
+    clean_samples = []
+    for sample in samples:
+        dynamic = classify_lv_dynamic(
+            sample["r_0"],
+            sample["r_1"],
+            sample["A_00"],
+            sample["A_01"],
+            sample["A_10"],
+            sample["A_11"],
+        )
+        if dynamic == "Unbounded Growth" or dynamic == "Neutrality":
+            continue
+        clean_samples.append(sample)
+    samples = clean_samples
 
     # Mimic plate structure
     seeding, colids, rowids = get_plate_structure()
@@ -48,7 +63,7 @@ def main():
             for i, fs in enumerate(seeding):
                 for j, row in enumerate(rowids):
                     save_loc = f"{data_dir}/{s}/{plate}/{row}{colids[i]}"
-                    init_count = random.uniform(0.05, 0.1) * args.grid_x * args.grid_y
+                    init_count = random.uniform(0.1, 0.2) * args.grid_x * args.grid_y
                     write_config(
                         save_loc=save_loc,
                         seed=j,
