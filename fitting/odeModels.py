@@ -76,7 +76,7 @@ class LotkaVolterra(ODEModel):
     # The governing equations
     def ModelEqns(self, t, uVec):
         S, R, _ = uVec
-        if S > 1e5 or R > 1e5:
+        if S > 1e6 or R > 1e6:
             return np.zeros_like(uVec)
         dudtVec = np.zeros_like(uVec)
         dudtVec[0] = S * (
