@@ -181,6 +181,7 @@ def label_qualitative_dynamics(df, keys=["Model", "Experiment"]):
     # Combine LV and EGT long-term dynamics columns
     df_q["Dynamic"] = df_q["Lotka-Volterra Dynamic"].fillna(df_q["Replicator Dynamic"])
     df_q = df_q[keys + ["Dynamic"]]
+    df_q["Dynamic"] = df_q["Dynamic"].fillna("Unknown")
     return df.merge(df_q, on=keys)
 
 

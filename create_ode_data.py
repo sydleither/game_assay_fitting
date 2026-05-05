@@ -54,7 +54,7 @@ def main():
             args.num_samples,
             ["r_S", "r_R", "a_SS", "a_SR", "a_RS", "a_RR"],
             [0, 0, -1e-5, -1e-5, -1e-5, -1e-5],
-            [0.1, 0.1, 0, 1e-5, 1e-5, 0],
+            [0.1, 0.1, 0, 0, 0, 0],
             [False, False, False, False, False, False],
             seed=args.seed,
         )

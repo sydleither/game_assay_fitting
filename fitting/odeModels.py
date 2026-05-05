@@ -64,10 +64,10 @@ class LotkaVolterra(ODEModel):
             **self.paramDic,
             "r_S": 0.1,
             "r_R": 0.1,
-            "a_SR": 1e-6,
-            "a_SS": -2e-5,
-            "a_RS": 1e-6,
-            "a_RR": -2e-5,
+            "a_SR": -1e-6,
+            "a_SS": -2e-6,
+            "a_RS": -1e-6,
+            "a_RR": -2e-6,
             "S0": 100,
             "R0": 100,
         }
@@ -76,8 +76,6 @@ class LotkaVolterra(ODEModel):
     # The governing equations
     def ModelEqns(self, t, uVec):
         S, R, _ = uVec
-        if S > 1e6 or R > 1e6:
-            return np.zeros_like(uVec)
         dudtVec = np.zeros_like(uVec)
         dudtVec[0] = S * (
             self.paramDic["r_S"] + self.paramDic["a_SS"] * S + self.paramDic["a_SR"] * R
@@ -95,10 +93,10 @@ class LotkaVolterra(ODEModel):
         params = Parameters()
         params.add("r_S", value=0.05, min=0, max=0.1, vary=True)
         params.add("r_R", value=0.05, min=0, max=0.1, vary=True)
-        params.add("a_SS", value=-2e-5, min=-1e-4, max=0, vary=True)
-        params.add("a_RR", value=-2e-5, min=-1e-4, max=0, vary=True)
-        params.add("a_SR", value=1e-6, min=-1e-4, max=1e-4, vary=True)
-        params.add("a_RS", value=1e-6, min=-1e-4, max=1e-4, vary=True)
+        params.add("a_SS", value=-2e-6, min=-1e-3, max=0, vary=True)
+        params.add("a_RR", value=-2e-6, min=-1e-3, max=0, vary=True)
+        params.add("a_SR", value=-1e-6, min=-1e-3, max=0, vary=True)
+        params.add("a_RS", value=-1e-6, min=-1e-3, max=0, vary=True)
         params.add("S0", value=100, min=0, max=1e4, vary=False)
         params.add("R0", value=100, min=0, max=1e4, vary=False)
         return params
