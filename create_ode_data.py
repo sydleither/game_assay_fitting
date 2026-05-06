@@ -5,7 +5,6 @@ import random
 
 import pandas as pd
 
-from compare_fits import classify_game, classify_lv_dynamic
 from EGT_HAL.config_utils import latin_hybercube_sample
 from fitting.odeModels import create_model, get_models
 from game_assay.game_analysis import calculate_growth_rates, calculate_payoffs
@@ -28,7 +27,6 @@ def main():
         raise ValueError("Provide noise (sigma=x*noise) <= 0.25")
 
     # Set interaction parameters
-    clean_samples = []
     if args.model == "replicator":
         samples = latin_hybercube_sample(
             args.num_samples,
@@ -38,16 +36,6 @@ def main():
             [False, False, False, False],
             seed=args.seed,
         )
-        for sample in samples:
-            dynamic = classify_game(
-                sample["p_SS"],
-                sample["p_SR"],
-                sample["p_RS"],
-                sample["p_RR"],
-            )
-            if dynamic == "Unknown":
-                continue
-            clean_samples.append(sample)
     else:
         # 1e-5 = 0.1 / 10000
         samples = latin_hybercube_sample(
@@ -58,19 +46,6 @@ def main():
             [False, False, False, False, False, False],
             seed=args.seed,
         )
-        for sample in samples:
-            dynamic = classify_lv_dynamic(
-                sample["r_S"],
-                sample["r_R"],
-                sample["a_SS"],
-                sample["a_SR"],
-                sample["a_RS"],
-                sample["a_RR"],
-            )
-            if dynamic == "Unbounded Growth" or dynamic == "Neutrality":
-                continue
-            clean_samples.append(sample)
-    samples = clean_samples
 
     # Mimic plate structure
     seeding, colids, rowids = get_plate_structure()
