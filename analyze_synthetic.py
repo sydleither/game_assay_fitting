@@ -8,12 +8,12 @@ from scipy import stats
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
 
-from compare_fits import (
+from utils import (
     format_for_plotting,
     get_fit_df,
+    label_data_type,
     label_qualitative_dynamics,
 )
-from utils import label_data_type
 
 
 def plot_confusion_matrices(save_loc, df, data_type):
@@ -49,6 +49,7 @@ def plot_confusion_matrices(save_loc, df, data_type):
             matrix_mean,
             annot=annot,
             fmt="",
+            cmap=sns.cubehelix_palette(as_cmap=True),
             xticklabels=labels,
             yticklabels=labels if i == 0 else [],
             vmin=0,
