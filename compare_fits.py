@@ -59,7 +59,7 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
     )
     payoff_df = payoff_df.drop(["n", "c12", "c21", "r1", "r2"], axis=1)
     # Format growth rate dataframe
-    if "BIC" in growth_rate_df: #TODO
+    if "BIC" in growth_rate_df:  # TODO
         growth_rate_df = growth_rate_df.drop("BIC", axis=1)
     growth_rate_df = growth_rate_df.rename(
         {
@@ -83,7 +83,7 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
             "GrowthRate_window_start",
             "GrowthRate_window_end",
             "Error",
-            "BIC"
+            "BIC",
         ]
     ]
     # Combine dataframes
@@ -199,7 +199,7 @@ def format_for_plotting(df):
         new_param = param
         if "p_" in param or "a_" in param:
             new_param = param.upper()
-        new_param = fr"${new_param[0]}_{{{new_param[2:]}}}$"
+        new_param = rf"${new_param[0]}_{{{new_param[2:]}}}$"
         new_param_names[param] = new_param
     df = df.rename(new_param_names, axis=1)
     # Renaming replicator to exponential growth
@@ -278,7 +278,9 @@ def plot_overlaid_gamespace(save_loc, df):
     # Plot error distribution
     df["Coordinates"] = df[["Advantage Resistant", "Advantage Sensitive"]].values.tolist()
     df = df.pivot(index="Experiment", columns="Model", values="Coordinates").reset_index()
-    df["Error"] = df.apply(lambda x: euclidean(x["Game Assay"], x["Replicator"]), axis=1)
+    df["Error"] = df.apply(
+        lambda x: euclidean(x["Game Assay"], x["Exponential Growth ODE"]), axis=1
+    )
     sns.barplot(
         df,
         x="Experiment",
@@ -315,7 +317,7 @@ def plot_errors_facet(save_loc, df, sns_plot, x, y, hue, facet):
     if hue:
         facet_grid.add_legend()
     if x == "Experiment":
-        facet_grid.set_xticklabels([])
+        facet_grid.tick_params("x", rotation=90)
     facet_grid.figure.patch.set_alpha(0.0)
     facet_grid.tight_layout()
     facet_grid.savefig(f"{save_loc}/ode_{x}_{y}_{hue}_{facet}.png", bbox_inches="tight", dpi=200)
@@ -399,6 +401,8 @@ def main():
     df = get_fit_df(args.data_dir)
 
     # Formatting
+    if "experimental" not in args.data_dir:
+        df["Experiment"] = df["Experiment"].str.split("_").str[-1]
     mean_error = df[["Model", "Experiment", "Error"]].groupby(["Model", "Experiment"]).mean()
     mean_error.reset_index()
     mean_error = mean_error.rename({"Error": "Mean Count Error"}, axis=1)
@@ -408,12 +412,24 @@ def main():
     df = label_qualitative_dynamics(df)
     plot_qualitative(args.data_dir, df)
 
+    # Label qualitative game of each experiment
+    df["1"] = 1
+    plot_errors_facet(
+        args.data_dir,
+        df.sample(frac=0.01),
+        sns.barplot,
+        "1",
+        "Experiment",
+        "Dynamic",
+        "Model"
+    )
+
     # Plot generic fitting errors
     plot_errors(args.data_dir, df, sns.barplot, "Model", "Error", None)
     plot_errors_facet(args.data_dir, df, sns.barplot, "Experiment", "Error", "Experiment", "Model")
 
     # Plot replicator vs game assay fitting errors
-    df = df[df["Model"].isin(["Game Assay", "Replicator"])]
+    df = df[df["Model"].isin(["Game Assay", "Exponential Growth ODE"])]
     plot_errors_facet(
         args.data_dir,
         df,

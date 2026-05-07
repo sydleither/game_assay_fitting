@@ -6,7 +6,12 @@ import pandas as pd
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
 
-from compare_fits import get_fit_df, plot_errors_facet, label_qualitative_dynamics
+from compare_fits import (
+    format_for_plotting,
+    get_fit_df,
+    plot_errors_facet,
+    label_qualitative_dynamics,
+)
 from utils import get_parameter_names, label_data_type
 
 
@@ -61,6 +66,7 @@ def plot_accuracy(data_dir, df, data_type):
     # barplot
     fig, ax = plt.subplots(figsize=(4, 4))
     sns.barplot(pd.DataFrame(accuracies), x="Model", y="Accuracy", color="#9a0eea", ax=ax)
+    ax.tick_params("x", rotation=45)
     ax.set(title=f"Qualitative Interaction Classification Accuracy\nfor {data_type} Data")
     fig.patch.set_alpha(0.0)
     fig.tight_layout()
@@ -68,10 +74,40 @@ def plot_accuracy(data_dir, df, data_type):
     plt.close()
 
 
+def plot_freq_dependence_fits(save_loc, df, data_type):
+    fig, ax = plt.subplots(figsize=(4, 4))
+    sns.barplot(
+        df[df["Model"] == "Game Assay"].sort_values(by="Dynamic"),
+        x="Dynamic",
+        y="Frequency Dependence Error",
+        ax=ax,
+    )
+    ax.set(
+        title=f"Game Assay Fit Error on {data_type} Data",
+        ylabel="Growth Rate by Fraction Sensitive\nFit Error",
+    )
+    ax.tick_params("x", rotation=45)
+    fig.patch.set_alpha(0.0)
+    fig.tight_layout()
+    fig.savefig(f"{save_loc}/{data_type}_assay_freqdepend_fits.png", bbox_inches="tight", dpi=200)
+    plt.close()
+
+    # print(
+    #     df[["Model", "Dynamic", "Frequency Dependence Error"]]
+    #     .drop_duplicates()
+    #     .groupby(["Model", "Dynamic"])
+    #     .agg(["mean", "sem"])
+    # )
+
 
 def qualitative_results(save_loc, df, data_type):
     df = label_qualitative_dynamics(df)
+    df = format_for_plotting(df)
     plot_accuracy(save_loc, df, data_type)
+
+    df_gt = df[df["Model"] == "Ground Truth"][["Experiment", "Dynamic"]]
+    df = df[df["Model"] != "Ground Truth"].merge(df_gt, on="Experiment", suffixes=("", " True"))
+    plot_freq_dependence_fits(save_loc, df, data_type)
 
 
 def quantitative_results(save_loc, df):
@@ -115,8 +151,8 @@ def main():
     data_type = label_data_type(args.data_dir)
 
     # Save results
-    quantitative_results(args.data_dir, df)
     qualitative_results(args.data_dir, df, data_type)
+    quantitative_results(args.data_dir, df)
 
 
 if __name__ == "__main__":
