@@ -226,7 +226,7 @@ def plot_spatial(save_loc, data_dir, df, cell_colors, times):
         plt.close()
 
 
-def individual_analysis(data_dir, exp_name, rewrite=True, save_plots=True):
+def individual_analysis(data_dir, exp_name, rewrite=False, save_plots=True):
     # Create images directory
     save_loc = f"{data_dir}/{exp_name}/images"
     if not os.path.exists(save_loc):
@@ -261,7 +261,10 @@ def individual_analysis(data_dir, exp_name, rewrite=True, save_plots=True):
 
         # Plot spatial visualizations
         times = sorted(counts_df["Time"].unique())[::2]
-        plot_spatial(save_loc, data_dir, locations_df, cell_colors, times)
+        try:
+            plot_spatial(save_loc, data_dir, locations_df, cell_colors, times)
+        except FileNotFoundError:
+            return
 
 
 def main():

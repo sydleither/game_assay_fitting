@@ -4,10 +4,10 @@ from string import ascii_uppercase
 solver_kws = {
     "method": "RK45",
     "absErr": 1.0e-6,
-    "relErr": 1.0e-3,
-    "suppressOutputB": False,
+    "relErr": 1.0e-4,
+    "suppressOutputB": True,
     "max_step": 1,
-    "dt": 0.1,
+    "dt": 0.01,
 }
 
 optimiser_kws = {
@@ -68,10 +68,11 @@ def get_colors():
 
 
 def label_data_type(data_dir):
+    noisy = "Noisy " if "noisy" in data_dir else ""
     if "ode_egt" in data_dir:
-        return "Exponential Growth ODE"
+        return f"{noisy}Exponential Growth ODE"
     if "ode_lv" in data_dir:
-        return "Lotka-Volterra ODE"
+        return f"{noisy}Lotka-Volterra ODE"
     if "abm" in data_dir and "_" in data_dir:
         return data_dir.split("/")[1].split("_")[1].title() + " Spatial Agent-Based Model"
     return data_dir.replace("data/", "").title().replace("_", " ")
