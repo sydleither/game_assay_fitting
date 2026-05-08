@@ -30,6 +30,7 @@ def plot_accuracy(save_loc, df):
         y="Accuracy",
         hue="Exponential Growth Window Strategy",
     )
+    facet.tick_params("x", rotation=45)
     facet.figure.patch.set_alpha(0.0)
     facet.tight_layout()
     facet.savefig(f"{save_loc}/accuracy_window.png", bbox_inches="tight", dpi=200)
@@ -44,6 +45,7 @@ def plot_entropy(save_loc, df):
         y="Entropy",
         hue="Exponential Growth Window Strategy",
     )
+    facet.tick_params("x", rotation=45)
     facet.figure.patch.set_alpha(0.0)
     facet.tight_layout()
     facet.savefig(f"{save_loc}/entropy_window.png", bbox_inches="tight", dpi=200)
@@ -165,6 +167,21 @@ def write_run_script(in_dir, out_dir, run_cmd):
                     f.write(f"{run_cmd} exponential_growth_window.py {arg_str}\n")
 
 
+def write_run_script_abm(in_dir, out_dir, run_cmd):
+    os.makedirs(out_dir)
+    with open(f"{out_dir}/exponential_growth_windows.sh", "w") as f:
+        for window in ["none", "per_exp", "per_well", "per_cell"]:
+            for rep in os.listdir(in_dir):
+                if os.path.isfile(f"{in_dir}/{rep}"):
+                    continue
+                for exp in os.listdir(f"{in_dir}/{rep}/formatted")[::2]:
+                    if os.path.isfile(f"{in_dir}/{rep}/formatted/{exp}") or exp == "layout_files":
+                        continue
+                    os.makedirs(f"{out_dir}/{window}/{rep}/formatted/{exp}/images")
+                    arg_str = f"-in {in_dir} -rep {rep} -exp {exp} -w {window}"
+                    f.write(f"{run_cmd} exponential_growth_window.py {arg_str}\n")
+
+
 def main():
     # Read in arguments
     parser = argparse.ArgumentParser()
@@ -181,7 +198,10 @@ def main():
     out_dir = f"{in_dir}_gr"
 
     if args.exp_name is None and args.plot == 0:
-        write_run_script(in_dir, out_dir, args.run_cmd)
+        if "abm" in args.in_dir:
+            write_run_script_abm(in_dir, out_dir, args.run_cmd)
+        else:
+            write_run_script(in_dir, out_dir, args.run_cmd)
         return
 
     if args.plot == 0:
