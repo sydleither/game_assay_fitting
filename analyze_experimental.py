@@ -81,14 +81,14 @@ def plot_dynamics(save_loc, df, data_type="Experimental"):
 def plot_entropy(save_loc, df, data_type="Experimental"):
     # lower entropy = more of the same category
     df = df[["Experiment", "Model", "Dynamic"]].drop_duplicates()
-    df = (
-        df.groupby(["Experiment", "Model"])
+    entropies = (
+        df.groupby("Model")["Dynamic"]
         .value_counts(normalize=True)
         .groupby(level=0)
         .apply(entropy)
     )
-    print(df)
-    exit()
+    df = df.merge(entropies, on="Model")
+    df = df.rename({"proportion": "Entropy"}, axis=1)
     fig, ax = plt.subplots(4, 4)
     sns.barplot(df, x="Model", y="Entropy", color="#9a0eea", ax=ax)
     ax.set_title(f"Entropy of Qualitative Interaction Classifications\nfor {data_type} Data")

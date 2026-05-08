@@ -2,10 +2,13 @@ import argparse
 import os
 
 import pandas as pd
+from scipy.stats import entropy
+import seaborn as sns
 
 from utils import (
     format_for_plotting,
     get_fit_df,
+    label_data_type,
     label_qualitative_dynamics,
 )
 from fit_ode import fit
@@ -18,33 +21,75 @@ from run_game_assay import plot_fits, plot_freqdepend_fit
 from utils import get_cell_types
 
 
+def plot_accuracy(save_loc, df):
+    facet = sns.catplot(
+        data=df[df["Data Type"] != "Experimental"],
+        kind="bar",
+        col="Model",
+        x="Data Type",
+        y="Accuracy",
+        hue="Exponential Growth Window Strategy",
+    )
+    facet.figure.patch.set_alpha(0.0)
+    facet.tight_layout()
+    facet.savefig(f"{save_loc}/accuracy_window.png", bbox_inches="tight", dpi=200)
+
+
+def plot_entropy(save_loc, df):
+    facet = sns.catplot(
+        data=df[df["Data Type"] == "Experimental"],
+        kind="bar",
+        col="Model",
+        x="Data Type",
+        y="Entropy",
+        hue="Exponential Growth Window Strategy",
+    )
+    facet.figure.patch.set_alpha(0.0)
+    facet.tight_layout()
+    facet.savefig(f"{save_loc}/entropy_window.png", bbox_inches="tight", dpi=200)
+
+
 def get_ground_truth(in_data_dir, df):
     if not os.path.exists(f"{in_data_dir}/ground_truth.csv"):
+        entropies = (
+            df[["Experiment", "Model", "Dynamic"]]
+            .groupby("Model")["Dynamic"]
+            .value_counts(normalize=True)
+            .groupby(level=0)
+            .apply(entropy)
+        )
+        df = df.merge(entropies, on="Model")
+        df = df.rename({"proportion": "Entropy"}, axis=1)
         return df
     df_gt = pd.read_csv(f"{in_data_dir}/ground_truth.csv")
-    df_gt["Growth Rate Window"] = "Ground Truth"
-    df_gt["Model"] = "Ground Truth"
-    return pd.concat([df, df_gt])
+    df_gt = label_qualitative_dynamics(df_gt, ["Experiment"])
+    df_gt = df.merge(df_gt, on="Experiment", suffixes=("", " True"))
+    df_gt["Correct"] = df_gt["Dynamic"] == df_gt["Dynamic True"]
+    df_gt["Accuracy"] = df_gt.groupby("Model")["Correct"].transform("mean")
+    return df_gt
 
 
-def get_growth_rates(in_dir, out_dir):
+def get_growth_rates():
     # Read in all the data files
     df = []
-    for window in os.listdir(out_dir):
-        if os.path.isfile(f"{out_dir}/{window}"):
+    for data_dir in os.listdir("data"):
+        if not data_dir.endswith("gr"):
             continue
-        for rep in os.listdir(f"{out_dir}/{window}"):
-            if os.path.isfile(f"{out_dir}/{window}/{rep}"):
+        for window in os.listdir(f"data/{data_dir}"):
+            if os.path.isfile(f"data/{data_dir}/{window}"):
                 continue
-            df_window = get_fit_df(f"{out_dir}/{window}/{rep}")
-            df_window["Replicate"] = rep
-            df_window["Growth Rate Window"] = window
-            df.append(df_window)
+            for rep in os.listdir(f"data/{data_dir}/{window}"):
+                if os.path.isfile(f"data/{data_dir}/{window}/{rep}"):
+                    continue
+                df_exp = get_fit_df(f"data/{data_dir}/{window}/{rep}")
+                df_exp = df_exp.drop_duplicates(subset=["Model", "Experiment"])
+                df_exp = label_qualitative_dynamics(df_exp, ["Model", "Experiment"])
+                df_exp = get_ground_truth(f"data/{data_dir[:-3]}/{rep}", df_exp)
+                df_exp["Replicate"] = rep
+                df_exp["Growth Rate Window"] = window
+                df_exp["Data Type"] = label_data_type(data_dir[:-3])
+                df.append(df_exp)
     df = pd.concat(df)
-
-    # Final formatting and return
-    df = get_ground_truth(in_dir, df)
-    df = label_qualitative_dynamics(df, ["Growth Rate Window", "Replicate", "Model", "Experiment"])
     df = format_for_plotting(df)
     return df.reset_index()
 
@@ -112,7 +157,7 @@ def write_run_script(in_dir, out_dir, run_cmd):
             for rep in os.listdir(in_dir):
                 if os.path.isfile(f"{in_dir}/{rep}"):
                     continue
-                for exp in os.listdir(f"{in_dir}/{rep}"):
+                for exp in os.listdir(f"{in_dir}/{rep}")[::2]:
                     if os.path.isfile(f"{in_dir}/{rep}/{exp}") or exp == "layout_files":
                         continue
                     os.makedirs(f"{out_dir}/{window}/{rep}/{exp}/images")
@@ -143,8 +188,9 @@ def main():
         save_growth_rate(in_dir, out_dir, args.replicate, args.exp_name, args.window)
 
     if args.plot == 1:
-        #df = get_growth_rates(in_dir, out_dir)
-        print("todo implement plots")
+        df = get_growth_rates()
+        plot_accuracy("data", df)
+        plot_entropy("data", df)
 
 
 if __name__ == "__main__":

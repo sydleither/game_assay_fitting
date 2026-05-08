@@ -169,9 +169,6 @@ def main():
         overview_df["Date"] = pd.to_datetime(overview_df["Date"], format="%m/%d/%y")
         overview_df.to_excel(f"{data_path}/overview.xlsx", index=False)
 
-        # Make images directory
-        os.mkdir(f"{data_path}/{exp_name}/images")
-
     # Save sbatch run scripts
     out = args.data_dir
     with open(f"{out}/fit_models.sh", "w") as f:
