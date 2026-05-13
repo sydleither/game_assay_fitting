@@ -12,7 +12,7 @@ from game_assay.game_analysis import (
     calculate_locations,
     calculate_payoffs,
 )
-from utils import get_cell_types
+from utils import get_cell_types, set_growth_rate_window
 
 
 def plot_counts(save_loc, df, cell_colors):
@@ -226,7 +226,7 @@ def plot_spatial(save_loc, data_dir, df, cell_colors, times):
         plt.close()
 
 
-def individual_analysis(data_dir, exp_name, rewrite=False, save_plots=True):
+def individual_analysis(data_dir, exp_name, window, rewrite=False, save_plots=True):
     # Create images directory
     save_loc = f"{data_dir}/{exp_name}/images"
     if not os.path.exists(save_loc):
@@ -234,10 +234,11 @@ def individual_analysis(data_dir, exp_name, rewrite=False, save_plots=True):
 
     # Save data csvs
     counts_df = calculate_counts(data_dir, exp_name, rewrite)
+    counts_df, gr_window = set_growth_rate_window(counts_df, window)
     sensitive_type, resistant_type = get_cell_types(exp_name)
     cell_types = [sensitive_type, resistant_type]
     growth_rate_df = calculate_growth_rates(
-        data_dir, exp_name, counts_df, None, cell_types, rewrite
+        data_dir, exp_name, counts_df, gr_window, cell_types, rewrite
     )
     payoff_df = calculate_payoffs(
         data_dir, exp_name, growth_rate_df, cell_types, f"Fraction_{sensitive_type}", rewrite
@@ -272,6 +273,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
     parser.add_argument("-exp", "--exp_name", type=str, default=None)
+    parser.add_argument("-window", "--window", type=str, default="none")
     parser.add_argument("-p", "--plot", type=int, default=1, choices=[0, 1])
     args = parser.parse_args()
 
@@ -282,7 +284,7 @@ def main():
         if os.path.isfile(f"{args.data_dir}/{exp_name}") or exp_name == "layout_files":
             continue
         print(exp_name)
-        individual_analysis(args.data_dir, exp_name, save_plots=save_plots)
+        individual_analysis(args.data_dir, exp_name, args.window, save_plots=save_plots)
 
 
 if __name__ == "__main__":

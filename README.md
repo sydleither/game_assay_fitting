@@ -88,9 +88,9 @@ python3 analyze_synthetic.py -dir data/abm_weak/formatted
 ```
 ### On experimental data
 '''
-python3 run_game_assay.py -dir data/experimental
-python3 fit_ode.py -dir data/experimental -model replicator
-python3 fit_ode.py -dir data/experimental -model "lotka-volterra"
+python3 run_game_assay.py -dir data/experimental/0 -window per_cell
+python3 fit_ode.py -dir data/experimental/0 -model replicator -window per_cell
+python3 fit_ode.py -dir data/experimental/0 -model "lotka-volterra" -window per_cell
 python3 analyze_experimental.py -dir data/experimental
 '''
 
@@ -98,5 +98,5 @@ python3 analyze_experimental.py -dir data/experimental
 ```
 python3 exponential_growth_window.py -in data/{data directory name}
 bash data/{data directory name}_gr/exponential_growth_windows.sh
-python3 exponential_growth_window.py -in data/{data directory name} -p 1
+python3 exponential_growth_window.py -in data -p 1
 ```

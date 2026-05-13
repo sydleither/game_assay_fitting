@@ -10,7 +10,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dir", "--data_dir", type=str, default="data/abm")
     parser.add_argument("-in", "--in_dir", type=str, default="raw")
-    parser.add_argument("-out", "--out_dir", type=str, default="formatted")
+    parser.add_argument("-out", "--out_dir", type=str, default=".")
     parser.add_argument("-run", "--run_cmd", type=str, default="python3")
     args = parser.parse_args()
 

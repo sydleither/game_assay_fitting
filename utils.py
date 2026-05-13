@@ -4,6 +4,11 @@ from string import ascii_uppercase
 import numpy as np
 import pandas as pd
 
+from game_assay.game_analysis_utils import (
+    optimize_growth_rate_window_per_exp,
+    optimize_growth_rate_window_per_well,
+)
+
 
 solver_kws = {
     "method": "RK45",
@@ -66,7 +71,7 @@ def get_colors():
         "Coexistence": "#C28367",
         "Bistability": "#047495",
         "Resistant Wins": "#EF7C8E",
-        "Neutrality": "#767567"
+        "Neutrality": "#767567",
     }
 
 
@@ -79,6 +84,21 @@ def label_data_type(data_dir):
     if "abm" in data_dir and "_" in data_dir:
         return data_dir.split("/")[1].split("_")[1].title() + " Spatial Agent-Based Model"
     return data_dir.replace("data/", "").title().replace("_", " ")
+
+
+def set_growth_rate_window(counts_df, window):
+    gr_window = None
+    if window == "none":
+        gr_window = (counts_df["Time"].min(), counts_df["Time"].max())
+    elif window == "per_well":
+        counts_df = optimize_growth_rate_window_per_well(counts_df)
+    elif window == "per_exp":
+        counts_df = optimize_growth_rate_window_per_exp(counts_df)
+    elif window == "per_cell":
+        gr_window = None
+    else:
+        raise ValueError(f"Illegal growth rate window: {window}")
+    return counts_df, gr_window
 
 
 ##################
@@ -161,7 +181,7 @@ def read_and_format_game_assay(data_dir, exp_name, sensitive_type):
 def get_fit_df(data_dir):
     df = []
     for exp_name in os.listdir(data_dir):
-        if os.path.isfile(f"{data_dir}/{exp_name}") or exp_name == "layout_files":
+        if os.path.isfile(f"{data_dir}/{exp_name}") or not exp_name.startswith("2"):
             continue
         sensitive_type, resistant_type = get_cell_types(exp_name)
         # Read in ODE fit data

@@ -12,8 +12,8 @@ from fitting.fittingUtils import residual_multipleConditions
 from fitting.myUtils import ExtractTreatmentFromDf
 from fitting.odeModels import create_model, get_models
 from game_assay.game_analysis import calculate_counts, calculate_growth_rates
-from game_assay.game_analysis_utils import calculate_bic, optimize_growth_rate_window_per_exp
-from utils import get_cell_types, optimiser_kws, solver_kws
+from game_assay.game_analysis_utils import calculate_bic
+from utils import get_cell_types, optimiser_kws, set_growth_rate_window, solver_kws
 
 
 def plot_fits(save_loc, exp_name, model_name, df, df_model, cell_colors, dc):
@@ -258,6 +258,7 @@ def main():
     parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
     parser.add_argument("-exp", "--exp_name", type=str, default=None)
     parser.add_argument("-model", "--model", type=str, choices=list(get_models()))
+    parser.add_argument("-window", "--window", type=str, default="none")
     args = parser.parse_args()
 
     # Fit model and save results
@@ -267,9 +268,11 @@ def main():
             continue
         print(exp_name)
         counts_df = calculate_counts(args.data_dir, exp_name)
-        counts_df = optimize_growth_rate_window_per_exp(counts_df)
+        counts_df, gr_window = set_growth_rate_window(counts_df, args.window)
         cell_types = get_cell_types(exp_name)
-        growth_rate_df = calculate_growth_rates(None, exp_name, counts_df, cell_type_list=cell_types)
+        growth_rate_df = calculate_growth_rates(
+            None, exp_name, counts_df, cell_type_list=cell_types, growth_rate_window=gr_window
+        )
         fit(
             args.data_dir,
             exp_name,
