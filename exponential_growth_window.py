@@ -6,12 +6,6 @@ import pandas as pd
 from scipy import stats
 import seaborn as sns
 
-from utils import (
-    format_for_plotting,
-    get_fit_df,
-    label_data_type,
-    label_qualitative_dynamics,
-)
 from fit_ode import fit
 from game_assay.game_analysis import calculate_counts, calculate_growth_rates, calculate_payoffs
 from game_assay.game_analysis_utils import (
@@ -19,7 +13,14 @@ from game_assay.game_analysis_utils import (
     optimize_growth_rate_window_per_well,
 )
 from run_game_assay import plot_fits, plot_freqdepend_fit
-from utils import get_cell_types
+from utils import (
+    analyze_significance,
+    format_for_plotting,
+    get_cell_types,
+    get_fit_df,
+    label_data_type,
+    label_qualitative_dynamics,
+)
 
 
 def plot_accuracy(save_loc, df):
@@ -44,10 +45,7 @@ def plot_accuracy(save_loc, df):
 
     fig, ax = plt.subplots()
     sns.barplot(
-        data=df[df["Data Type"] != "Experimental"]
-        .groupby(["Data Type", "Exponential Growth Window Strategy", "Model"])["Accuracy"]
-        .mean()
-        .reset_index(),
+        data=df[df["Data Type"] != "Experimental"],
         x="Exponential Growth Window Strategy",
         y="Accuracy",
         color="#8da0cb",
@@ -84,10 +82,7 @@ def plot_entropy(save_loc, df):
 
     fig, ax = plt.subplots()
     sns.barplot(
-        data=df[df["Data Type"] == "Experimental"]
-        .groupby(["Exponential Growth Window Strategy", "Model"])["Entropy"]
-        .mean()
-        .reset_index(),
+        data=df[df["Data Type"] == "Experimental"],
         x="Exponential Growth Window Strategy",
         y="Entropy",
         color="#fc8d62",
@@ -101,34 +96,6 @@ def plot_entropy(save_loc, df):
     fig.tight_layout()
     fig.savefig(f"{save_loc}/entropy_window_window.png", bbox_inches="tight", dpi=200)
     plt.close()
-
-
-def save_stats(save_loc, df):
-    print("Synthetic Data")
-    df_grp = (
-        df[df["Data Type"] != "Experimental"]
-        .groupby(["Exponential Growth Window Strategy", "Data Type", "Model"])["Accuracy"]
-        .mean()
-        .reset_index()
-        .groupby(["Exponential Growth Window Strategy"])["Accuracy"]
-        .agg(["mean", "count", "std"])
-    )
-    t_value = stats.t.ppf(0.975, df_grp["count"] - 1)
-    df_grp["ci"] = t_value * df_grp["std"] / (df_grp["count"] ** 0.5)
-    print(df_grp)
-
-    print("\nExperimental Data")
-    df_grp = (
-        df[df["Data Type"] == "Experimental"]
-        .groupby(["Exponential Growth Window Strategy", "Model"])["Entropy"]
-        .mean()
-        .reset_index()
-        .groupby(["Exponential Growth Window Strategy"])["Entropy"]
-        .agg(["mean", "count", "std"])
-    )
-    t_value = stats.t.ppf(0.975, df_grp["count"] - 1)
-    df_grp["ci"] = t_value * df_grp["std"] / (df_grp["count"] ** 0.5)
-    print(df_grp)
 
 
 def get_ground_truth(in_data_dir, df):
@@ -168,6 +135,7 @@ def get_growth_rates():
                     df_exp = df_exp.drop_duplicates(subset=["Model", "Experiment"])
                     df_exp = label_qualitative_dynamics(df_exp, ["Model", "Experiment"])
                     df_exp = get_ground_truth(f"data/{data_dir[:-3]}/{rep}", df_exp)
+                    df_exp = df_exp.drop_duplicates(subset="Model")
                     df_exp["Replicate"] = rep
                     df_exp["Growth Rate Window"] = window
                     df_exp["Data Type"] = label_data_type(f"data/{data_dir[:-3]}")
@@ -281,7 +249,22 @@ def main():
     if args.plot == 1:
         df = get_growth_rates()
         df = df.sort_values(by=["Data Type", "Exponential Growth Window Strategy", "Model"])
-        save_stats("data", df)
+
+        print("Synthetic Data")
+        print(analyze_significance(
+            df=df[df["Data Type"] != "Experimental"], 
+            group_col="Exponential Growth Window Strategy", 
+            value_col="Accuracy", 
+            control_label="None"
+        ))
+        print("\nExperimental Data")
+        print(analyze_significance(
+            df=df[df["Data Type"] == "Experimental"], 
+            group_col="Exponential Growth Window Strategy", 
+            value_col="Entropy", 
+            control_label="Per-Cell-Type"
+        ))
+
         plot_accuracy("data", df)
         plot_entropy("data", df)
 

@@ -3,6 +3,7 @@ from string import ascii_uppercase
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 from game_assay.game_analysis_utils import (
     optimize_growth_rate_window_per_exp,
@@ -71,7 +72,7 @@ def get_colors():
         "Coexistence": "#C28367",
         "Bistability": "#047495",
         "Resistant Wins": "#EF7C8E",
-        "Neutrality": "#767567",
+        #"Neutrality": "#767567",
     }
 
 
@@ -99,6 +100,62 @@ def set_growth_rate_window(counts_df, window):
     else:
         raise ValueError(f"Illegal growth rate window: {window}")
     return counts_df, gr_window
+
+
+# From gemini
+def analyze_significance(df, group_col, value_col, control_label):
+    # 1. Prepare grouped data
+    groups = df.groupby(group_col)[value_col].apply(list).to_dict()
+    
+    if control_label not in groups:
+        raise ValueError(f"Control label '{control_label}' not found in column '{group_col}'")
+    
+    control_data = np.array(groups[control_label])
+    control_mean = np.mean(control_data)
+    
+    results = []
+
+    # 2. Define the bootstrap statistic for difference
+    def mean_diff(sample_target, sample_control):
+        return np.mean(sample_target) - np.mean(sample_control)
+
+    for label, data in groups.items():
+        data = np.array(data)
+        current_mean = np.mean(data)
+        
+        # --- Calculate Individual CI ---
+        res_ind = stats.bootstrap(
+            (data,), np.mean, confidence_level=0.95, n_resamples=1000, method="percentile"
+        )
+        
+        # --- Calculate CI of Difference (vs Control) ---
+        # If it's the control itself, the difference is 0 and CI is [0,0]
+        if label == control_label:
+            diff_mean, diff_low, diff_high = 0.0, 0.0, 0.0
+            is_significant = False
+        else:
+            res_diff = stats.bootstrap(
+                (data, control_data), mean_diff, confidence_level=0.95, 
+                n_resamples=1000, method="percentile"
+            )
+            diff_mean = current_mean - control_mean
+            diff_low = res_diff.confidence_interval.low
+            diff_high = res_diff.confidence_interval.high
+            # Significant if the interval does not contain 0
+            is_significant = not (diff_low <= 0 <= diff_high)
+
+        results.append({
+            group_col: label,
+            "Mean": current_mean,
+            "CI_Low": res_ind.confidence_interval.low,
+            "CI_High": res_ind.confidence_interval.high,
+            "Diff_vs_Control": diff_mean,
+            "Diff_CI_Low": diff_low,
+            "Diff_CI_High": diff_high,
+            "Significant": is_significant
+        })
+
+    return pd.DataFrame(results)
 
 
 ##################

@@ -1,5 +1,4 @@
 import argparse
-from warnings import filterwarnings
 
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -7,9 +6,7 @@ import pandas as pd
 import seaborn as sns
 from scipy.stats import entropy
 
-from utils import get_colors, get_fit_df, label_qualitative_dynamics
-
-filterwarnings("ignore")
+from utils import get_colors, get_fit_df, label_qualitative_dynamics, format_for_plotting
 
 
 def plot_parameter_ranges(data_dir, df, data_type="Experimental"):
@@ -60,8 +57,8 @@ def plot_dynamics(save_loc, df, data_type="Experimental"):
     df["Experiment"] = df["Experiment"].map({s: i for i, s in enumerate(df["Experiment"].unique())})
     df = df.pivot(index="Experiment", columns="Model", values="Dynamic").replace(dynamics_to_int)
 
-    fig, ax = plt.subplots(4, 4)
-    sns.heatmap(
+    fig, ax = plt.subplots(figsize=(4, 4))
+    res = sns.heatmap(
         df,
         cmap=custom_cmap,
         ax=ax,
@@ -70,26 +67,29 @@ def plot_dynamics(save_loc, df, data_type="Experimental"):
         cbar=True,
         cbar_kws={"ticks": range(n_colors), "label": "Dynamics"},
     )
+    colorbar = res.collections[0].colorbar
+    colorbar.set_ticklabels(dynamics)
+    colorbar.set_label("Dynamics")
     ax.set_title(f"Qualitative Interaction Classification of {data_type} Data")
-    ax.tick_params("x", rotation=45)
+    ax.tick_params("x", rotation=90)
     fig.patch.set_alpha(0.0)
     fig.tight_layout()
-    fig.savefig(f"{save_loc}/classifications_{data_type}.png", bbox_inches="tight", dpi=200)
+    fig.savefig(
+        f"{save_loc}/classifications_{data_type.strip()}.png",
+        bbox_inches="tight",
+        dpi=200,
+    )
     plt.close()
 
 
 def plot_entropy(save_loc, df, data_type="Experimental"):
-    # lower entropy = more of the same category
     df = df[["Experiment", "Model", "Dynamic"]].drop_duplicates()
     entropies = (
-        df.groupby("Model")["Dynamic"]
-        .value_counts(normalize=True)
-        .groupby(level=0)
-        .apply(entropy)
+        df.groupby("Model")["Dynamic"].value_counts(normalize=True).groupby(level=0).apply(entropy)
     )
     df = df.merge(entropies, on="Model")
     df = df.rename({"proportion": "Entropy"}, axis=1)
-    fig, ax = plt.subplots(4, 4)
+    fig, ax = plt.subplots(figsize=(4, 4))
     sns.barplot(df, x="Model", y="Entropy", color="#9a0eea", ax=ax)
     ax.set_title(f"Entropy of Qualitative Interaction Classifications\nfor {data_type} Data")
     ax.tick_params("x", rotation=45)
@@ -102,16 +102,18 @@ def plot_entropy(save_loc, df, data_type="Experimental"):
 def main():
     # Read in arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
+    parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental/0")
     args = parser.parse_args()
 
     # Read in fitting data
     df = get_fit_df(args.data_dir)
+    df["Replicate"] = 0
     df = label_qualitative_dynamics(df)
+    df = format_for_plotting(df)
 
     # Plot results
     plot_entropy(args.data_dir, df)
-    plot_dynamics(args.data_dir, df)
+    plot_dynamics(args.data_dir, df, data_type="\nExperimental")
     plot_parameter_ranges(args.data_dir, df)
 
 
