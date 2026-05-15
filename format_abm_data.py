@@ -54,7 +54,7 @@ def main():
                     # Read in coordinates
                     df = pd.read_csv(
                         f"{full_path}/{plate}/{well}/coords.csv",
-                        usecols=[0, 1, 2, 3, 4],
+                        usecols=[0, 1, 2, 3],
                     )
                     # Save ground truth data
                     config = json.load(open(f"{full_path}/{plate}/{well}/config.json"))

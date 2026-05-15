@@ -67,21 +67,21 @@ python3 analyze_synthetic.py -dir data/ode_lv_noisy
 ### On spatial data
 ```
 python3 create_abm_data.py -dir data/abm_strong -m 2 -n 2
-bash data/abm_strong/raw/run0.sh
+bash data/abm_strong/run0.sh
 python3 format_abm_data.py -dir data/abm_strong
 bash data/abm_strong/fit_models.sh
 python3 analyze_synthetic.py -dir data/abm_strong/formatted
 ```
 ```
 python3 create_abm_data.py -dir data/abm_medium -m 4 -n 4
-bash data/abm_medium/raw/run0.sh
+bash data/abm_medium/run0.sh
 python3 format_abm_data.py -dir data/abm_medium
 bash data/abm_medium/fit_models.sh
 python3 analyze_synthetic.py -dir data/abm_medium/formatted
 ```
 ```
 python3 create_abm_data.py -dir data/abm_weak -m 6 -n 6
-bash data/abm_weak/raw/run0.sh
+bash data/abm_weak/run0.sh
 python3 format_abm_data.py -dir data/abm_weak
 bash data/abm_weak/fit_models.sh
 python3 analyze_synthetic.py -dir data/abm_weak/formatted

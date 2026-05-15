@@ -59,20 +59,13 @@ def get_parameter_names():
     ]
 
 
-def get_parameter_ranges(model):
-    if model == "replicator":
-        return [(0.03, 0.05)] * 4
-    elif model == "lotka-volterra":
-        return [(0.03, 0.05)] * 2 + [(-4e-6, -2e-7)] * 4
-
-
 def get_colors():
     return {
         "Sensitive Wins": "#4C956C",
         "Coexistence": "#C28367",
         "Bistability": "#047495",
         "Resistant Wins": "#EF7C8E",
-        #"Neutrality": "#767567",
+        # "Neutrality": "#767567",
     }
 
 
@@ -106,13 +99,13 @@ def set_growth_rate_window(counts_df, window):
 def analyze_significance(df, group_col, value_col, control_label):
     # 1. Prepare grouped data
     groups = df.groupby(group_col)[value_col].apply(list).to_dict()
-    
+
     if control_label not in groups:
         raise ValueError(f"Control label '{control_label}' not found in column '{group_col}'")
-    
+
     control_data = np.array(groups[control_label])
     control_mean = np.mean(control_data)
-    
+
     results = []
 
     # 2. Define the bootstrap statistic for difference
@@ -122,12 +115,12 @@ def analyze_significance(df, group_col, value_col, control_label):
     for label, data in groups.items():
         data = np.array(data)
         current_mean = np.mean(data)
-        
+
         # --- Calculate Individual CI ---
         res_ind = stats.bootstrap(
             (data,), np.mean, confidence_level=0.95, n_resamples=1000, method="percentile"
         )
-        
+
         # --- Calculate CI of Difference (vs Control) ---
         # If it's the control itself, the difference is 0 and CI is [0,0]
         if label == control_label:
@@ -135,8 +128,11 @@ def analyze_significance(df, group_col, value_col, control_label):
             is_significant = False
         else:
             res_diff = stats.bootstrap(
-                (data, control_data), mean_diff, confidence_level=0.95, 
-                n_resamples=1000, method="percentile"
+                (data, control_data),
+                mean_diff,
+                confidence_level=0.95,
+                n_resamples=1000,
+                method="percentile",
             )
             diff_mean = current_mean - control_mean
             diff_low = res_diff.confidence_interval.low
@@ -144,16 +140,18 @@ def analyze_significance(df, group_col, value_col, control_label):
             # Significant if the interval does not contain 0
             is_significant = not (diff_low <= 0 <= diff_high)
 
-        results.append({
-            group_col: label,
-            "Mean": current_mean,
-            "CI_Low": res_ind.confidence_interval.low,
-            "CI_High": res_ind.confidence_interval.high,
-            "Diff_vs_Control": diff_mean,
-            "Diff_CI_Low": diff_low,
-            "Diff_CI_High": diff_high,
-            "Significant": is_significant
-        })
+        results.append(
+            {
+                group_col: label,
+                "Mean": current_mean,
+                "CI_Low": res_ind.confidence_interval.low,
+                "CI_High": res_ind.confidence_interval.high,
+                "Diff_vs_Control": diff_mean,
+                "Diff_CI_Low": diff_low,
+                "Diff_CI_High": diff_high,
+                "Significant": is_significant,
+            }
+        )
 
     return pd.DataFrame(results)
 
@@ -312,6 +310,13 @@ def label_qualitative_dynamics(df, keys=["Replicate", "Model", "Experiment"]):
     df_q["Replicator Dynamic"] = df_q.apply(
         lambda x: classify_game(x["p_SS"], x["p_SR"], x["p_RS"], x["p_RR"]), axis=1
     )
+    if df_q["Replicator Dynamic"].isna().sum() < len(df_q):
+        df_q.loc[(df_q["p_SS"].isna()) & (~df_q["p_RR"].isna()), "Replicator Dynamic"] = (
+            "Resistant Wins"
+        )
+        df_q.loc[(df_q["p_RR"].isna()) & (~df_q["p_SS"].isna()), "Replicator Dynamic"] = (
+            "Sensitive Wins"
+        )
 
     # Get fixed point dynamics of lotka-volterra models
     df_q["Lotka-Volterra Dynamic"] = df_q.apply(

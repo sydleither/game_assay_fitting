@@ -17,12 +17,22 @@ from utils import (
 
 
 def plot_confusion_matrices(save_loc, df, data_type):
+    def fmt(x):
+        s = f"{x:.2f}"
+        if s == "0.00":
+            return "0"
+        if s.startswith("0."):
+            return s[1:]
+        if s.endswith(".00"):
+            return s[:-3]
+        return s
+
     models = df["Model"].unique()
     labels = sorted(df["Dynamic"].unique())
     fig, ax = plt.subplots(
         ncols=len(models) + 1,
         gridspec_kw=dict(width_ratios=[1] * len(models) + [0.1]),
-        figsize=(4 * len(models), 4),
+        figsize=(5 * len(models), 5),
     )
 
     for i, model in enumerate(models):
@@ -39,11 +49,25 @@ def plot_confusion_matrices(save_loc, df, data_type):
             )
         matrices = np.stack(matrices)
         matrix_mean = np.mean(matrices, axis=0)
-        matrix_ci = stats.sem(matrices, axis=0) * stats.t.ppf((1.95) / 2, len(matrices) - 1)
+
+        matrix_ci_low = np.zeros_like(matrix_mean)
+        matrix_ci_high = np.zeros_like(matrix_mean)
+        for r in range(matrix_mean.shape[0]):
+            for c in range(matrix_mean.shape[1]):
+                cell_samples = matrices[:, r, c]
+                res = stats.bootstrap(
+                    (cell_samples,),
+                    np.mean,
+                    confidence_level=0.95,
+                    n_resamples=1000,
+                    method="percentile",
+                )
+                matrix_ci_low[r, c] = res.confidence_interval.low
+                matrix_ci_high[r, c] = res.confidence_interval.high
 
         annot = [
-            [f"{m:.2f}\n±{c:.2f}" for m, c in zip(row_m, row_c)]
-            for row_m, row_c in zip(matrix_mean, matrix_ci)
+            [f"{m:.2f}\n({fmt(lo)}, {fmt(hi)})" for m, lo, hi in zip(row_m, row_lo, row_hi)]
+            for row_m, row_lo, row_hi in zip(matrix_mean, matrix_ci_low, matrix_ci_high)
         ]
         sns.heatmap(
             matrix_mean,
@@ -59,11 +83,19 @@ def plot_confusion_matrices(save_loc, df, data_type):
         )
         acc = np.diagonal(matrices, axis1=1, axis2=2).mean(axis=1)
         acc_mean = np.mean(acc)
-        acc_ci = stats.sem(acc) * stats.t.ppf((1.95) / 2, len(matrices) - 1)
+        res_acc = stats.bootstrap(
+            (acc,),
+            np.mean,
+            confidence_level=0.95,
+            n_resamples=1000,
+            method="percentile",
+        )
+        acc_lo = res_acc.confidence_interval.low
+        acc_hi = res_acc.confidence_interval.high
         ax[i].set(
             xlabel=model,
             ylabel="Ground Truth",
-            title=f"Accuracy: {acc_mean:.2f} ± {acc_ci:.2f}",
+            title=f"Accuracy: {acc_mean:.2f} ({acc_lo:.2f}, {acc_hi:.2f})",
         )
 
     fig.colorbar(ax[1].collections[0], cax=ax[-1])
@@ -76,7 +108,13 @@ def plot_confusion_matrices(save_loc, df, data_type):
 
 def plot_accuracy(save_loc, df, data_type):
     fig, ax = plt.subplots(figsize=(4, 4))
-    sns.barplot(df, x="Model", y="Accuracy", color="#9a0eea", ax=ax)
+    sns.barplot(
+        df.drop_duplicates(subset=["Replicate", "Model"]),
+        x="Model",
+        y="Accuracy",
+        color="#8da0cb",
+        ax=ax,
+    )
     ax.tick_params("x", rotation=45)
     ax.set(title=f"Qualitative Interaction Classification Accuracy\non {data_type} Data")
     fig.patch.set_alpha(0.0)
@@ -90,7 +128,7 @@ def plot_true_class_balance(save_loc, df, data_type):
     counts = (
         df[df["Model"] == "Ground Truth"].groupby(["Dynamic", "Replicate"]).size().reset_index()
     )
-    sns.barplot(counts, x="Dynamic", y=0, color="#c04e01", ax=ax)
+    sns.barplot(counts, x="Dynamic", y=0, color="#b3b3b3", ax=ax)
     ax.tick_params("x", rotation=45)
     ax.set(title=f"Class Balance of Generated\n{data_type} Data")
     ax.set(ylabel="Count Per-Replicate")
@@ -130,6 +168,7 @@ def main():
     df_gt = df_gt.drop_duplicates(subset=["Replicate", "Experiment", "Model"])
     df_gt["Correct"] = df_gt["Dynamic"] == df_gt["Dynamic True"]
     df_gt["Accuracy"] = df_gt.groupby(["Replicate", "Model"])["Correct"].transform("mean")
+    df_gt = df_gt.sort_values(by=["Model", "Replicate", "Experiment"])
 
     # Plot
     plot_true_class_balance(save_loc, df, data_type)
