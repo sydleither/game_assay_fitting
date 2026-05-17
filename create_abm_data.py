@@ -1,8 +1,63 @@
 import argparse
 import random
 
-from EGT_HAL.config_utils import latin_hybercube_sample, write_config, write_run_scripts
-from utils import get_plate_structure
+from utils import get_plate_structure, latin_hypercube_sample
+
+
+def sample_three_strategy(seed, num_samples):
+    samples = latin_hypercube_sample(
+        num_samples,
+        ["P_00", "P_01", "P_02", "P_10", "P_11", "P_12", "P_20", "P_21"],
+        [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.0, 0.0],
+        [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05],
+        [False] * 8,
+        seed=seed,
+    )
+    return samples
+
+
+def sample_two_strategy(seed, num_samples):
+    samples = latin_hypercube_sample(
+        num_samples,
+        ["P_00", "P_01", "P_10", "P_11"],
+        [0.0] * 4,
+        [0.1] * 4,
+        [False] * 4,
+        seed=seed,
+    )
+    return samples
+
+
+def create_run_cmd(
+    save_loc, run_cmd, seed, sample, s, strategies, fs, grid, radius, write_freq, steps
+):
+    abm_args = f"-seed {seed} -l {grid} -r {radius} -write {write_freq} -steps {steps}"
+    if strategies == 2:
+        init_freq = " ".join([str(x) for x in [fs, 1 - fs]])
+        payoff = " ".join(
+            [str(x) for x in [sample["P_00"], sample["P_01"], sample["P_10"], sample["P_11"]]]
+        )
+    else:
+        empty = random.uniform(0.9, 0.95)
+        init_freq = " ".join([str(x) for x in [(1 - empty) * fs, (1 - empty) * (1 - fs), empty]])
+        payoff = " ".join(
+            [
+                str(x)
+                for x in [
+                    sample["P_00"],
+                    sample["P_01"],
+                    sample["P_02"],
+                    sample["P_10"],
+                    sample["P_11"],
+                    sample["P_12"],
+                    sample["P_20"],
+                    sample["P_21"],
+                    0,
+                ]
+            ]
+        )
+    sample_args = f"-loc {save_loc}/{s} -f {init_freq} -p {payoff}"
+    return f"{run_cmd} abm.py {abm_args} {sample_args}\n"
 
 
 def main():
@@ -10,20 +65,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dir", "--data_dir", type=str, default="data/abm")
     parser.add_argument("-exp", "--experiment_name", type=str, default="raw")
-    parser.add_argument(
-        "-run_cmd",
-        "--run_command",
-        type=str,
-        default="java -cp build/:lib/* SpatialEGT.SpatialEGT",
-    )
+    parser.add_argument("-run_cmd", "--run_cmd", type=str, default="python3")
     parser.add_argument("-reps", "--reps", type=int, default=10)
+    parser.add_argument("-strats", "--strategies", type=int, choices=[2, 3])
     parser.add_argument("-samples", "--num_samples", type=int, default=20)
-    parser.add_argument("-x", "--grid_x", type=int, default=100)
-    parser.add_argument("-y", "--grid_y", type=int, default=100)
-    parser.add_argument("-m", "--interaction_radius", type=int, default=2)
-    parser.add_argument("-n", "--reproduction_radius", type=int, default=2)
-    parser.add_argument("-freq", "--write_freq", type=int, default=4)
-    parser.add_argument("-end", "--end_time", type=int, default=80)
+    parser.add_argument("-l", "--grid", type=int, default=100)
+    parser.add_argument("-r", "--radius", type=int, default=1)
+    parser.add_argument("-write", "--write_freq", type=int, default=10)
+    parser.add_argument("-steps", "--steps", type=int, default=100)
     args = parser.parse_args()
 
     # Mimic plate structure
@@ -33,43 +82,35 @@ def main():
     run_output = []
     for rep in range(args.reps):
         # Set interaction parameters
-        samples = latin_hybercube_sample(
-            args.num_samples,
-            ["r_0", "r_1", "A_00", "A_01", "A_10", "A_11"],
-            [0.05, 0.05, -0.1, -0.1, -0.1, -0.1],
-            [0.1, 0.1, 0, 0, 0, 0],
-            [False] * 6,
-            seed=rep,
-        )
-
-        for s, sample in enumerate(samples):
-            # Save configs in data directory structure mimicing game assay's
+        if args.strategies == 2:
+            samples = sample_two_strategy(rep, args.num_samples)
+        else:
+            samples = sample_three_strategy(rep, args.num_samples)
+        # Save configs in data directory structure mimicing game assay's
+        for s, sample in samples:
             data_dir = f"{args.data_dir}/{rep}/{args.experiment_name}"
             for plate in [1]:
                 for i, fs in enumerate(seeding):
                     for j, row in enumerate(rowids):
                         save_loc = f"{data_dir}/{s}/{plate}/{row}{colids[i]}"
-                        init_count = random.uniform(0.01, 0.05) * args.grid_x * args.grid_y
-                        write_config(
-                            save_loc=save_loc,
-                            seed=j,
-                            num_types=2,
-                            interaction_matrix=[
-                                [sample["A_00"], sample["A_01"]],
-                                [sample["A_10"], sample["A_11"]],
-                            ],
-                            intrinsic_growths=[sample["r_0"], sample["r_1"]],
-                            initial_counts=[fs * init_count, (1 - fs) * init_count],
-                            grid_length=args.grid_x,
-                            grid_height=args.grid_y,
-                            interaction_radius=args.interaction_radius,
-                            reproduction_radius=args.reproduction_radius,
-                            ticks=args.end_time,
-                            write_freq=args.write_freq,
-                            dimension=2,
+                        sample_output = create_run_cmd(
+                            save_loc,
+                            args.run_cmd,
+                            j,
+                            sample,
+                            s,
+                            args.strategies,
+                            fs,
+                            args.grid,
+                            args.radius,
+                            args.write_freq,
+                            args.steps,
                         )
-                        run_output.append(f"{args.run_command} ../{save_loc}\n")
-    write_run_scripts(args.data_dir, run_output)
+                        run_output.append(sample_output)
+    # Run bash script with commands to run ABM simulations
+    with open(f"{save_loc}/run.sh", "w") as f:
+        for line in run_output:
+            f.write(line)
 
 
 if __name__ == "__main__":

@@ -5,9 +5,8 @@ import random
 
 import pandas as pd
 
-from EGT_HAL.config_utils import latin_hybercube_sample
 from fitting.odeModels import create_model, get_models
-from utils import get_plate_structure, solver_kws
+from utils import get_plate_structure, latin_hypercube_sample, solver_kws
 
 
 def main():
@@ -36,7 +35,7 @@ def main():
 
         # Set interaction parameters
         if args.model == "replicator":
-            samples = latin_hybercube_sample(
+            samples = latin_hypercube_sample(
                 args.num_samples,
                 ["p_SS", "p_SR", "p_RS", "p_RR"],
                 [0] * 4,
@@ -46,7 +45,7 @@ def main():
             )
         else:
             # 1e-5 = 0.1 / 10000
-            samples = latin_hybercube_sample(
+            samples = latin_hypercube_sample(
                 args.num_samples,
                 ["r_S", "r_R", "a_SS", "a_SR", "a_RS", "a_RR"],
                 [0.05, 0.05, -1e-5, -1e-5, -1e-5, -1e-5],
