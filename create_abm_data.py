@@ -72,8 +72,8 @@ def main():
     parser.add_argument("-samples", "--num_samples", type=int, default=20)
     parser.add_argument("-l", "--grid", type=int, default=100)
     parser.add_argument("-r", "--radius", type=int, default=1)
-    parser.add_argument("-write", "--write_freq", type=int, default=10)
-    parser.add_argument("-steps", "--steps", type=int, default=200)
+    parser.add_argument("-write", "--write_freq", type=int, default=5)
+    parser.add_argument("-steps", "--steps", type=int, default=100)
     args = parser.parse_args()
 
     # Mimic plate structure

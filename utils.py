@@ -50,8 +50,13 @@ def get_parameter_names():
     return [
         "p_SS",
         "p_SR",
+        "p_SE",
         "p_RS",
         "p_RR",
+        "p_RE",
+        "p_ES",
+        "p_ER",
+        "p_EE",
         "a_SS",
         "a_SR",
         "a_RS",
@@ -90,7 +95,7 @@ def label_data_type(data_dir):
         return f"{noisy}Lotka-Volterra ODE"
     if "abm" in data_dir and "_" in data_dir:
         parts = data_dir.split("/")[1].split("_")
-        return f"{parts[1]} Strategy {parts[2]} Spatial Agent-Based Model"
+        return f"{parts[1]} Spatial Agent-Based Model"
     return data_dir.replace("data/", "").title().replace("_", " ")
 
 

@@ -32,7 +32,7 @@ def plot_parameter_ranges(data_dir, df, data_type="Experimental"):
         x="Parameter",
         y="Value",
         kind="box",
-        color="#8e82fe",
+        color="#FFFFFF",
         sharex=False,
         sharey=False,
         height=4,
@@ -89,8 +89,10 @@ def plot_entropy(save_loc, df, data_type="Experimental"):
     )
     df = df.merge(entropies, on="Model")
     df = df.rename({"proportion": "Entropy"}, axis=1)
+    df = df.drop_duplicates("Model")
+    print(df)
     fig, ax = plt.subplots(figsize=(4, 4))
-    sns.barplot(df, x="Model", y="Entropy", color="#9a0eea", ax=ax)
+    sns.barplot(df, x="Model", y="Entropy", color="#fc8d62", ax=ax)
     ax.set_title(f"Entropy of Qualitative Interaction Classifications\nfor {data_type} Data")
     ax.tick_params("x", rotation=45)
     fig.patch.set_alpha(0.0)
@@ -110,6 +112,7 @@ def main():
     df["Replicate"] = 0
     df = label_qualitative_dynamics(df)
     df = format_for_plotting(df)
+    df = df.sort_values(by=["Model", "Experiment"])
 
     # Plot results
     plot_entropy(args.data_dir, df)

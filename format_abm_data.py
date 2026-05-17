@@ -127,19 +127,15 @@ def main():
 
         # Save ground truth
         gt_df = pd.DataFrame(ground_truth)
-        params = [x for x in gt_df.columns if "A_" in x or "r_" in x]
-        gt_df = gt_df[["Experiment"] + params].drop_duplicates()
-        gt_df = gt_df.rename(
-            {
-                "A_00": "a_SS",
-                "A_01": "a_SR",
-                "A_10": "a_RS",
-                "A_11": "a_RR",
-                "r_0": "r_S",
-                "r_1": "r_R",
-            },
-            axis=1,
-        )
+        gt_df["p_SS"] = config["payoff"][0]
+        gt_df["p_SR"] = config["payoff"][1]
+        gt_df["p_SE"] = config["payoff"][2]
+        gt_df["p_RS"] = config["payoff"][3]
+        gt_df["p_RR"] = config["payoff"][4]
+        gt_df["p_RE"] = config["payoff"][5]
+        gt_df["p_ES"] = config["payoff"][6]
+        gt_df["p_ER"] = config["payoff"][7]
+        gt_df["p_EE"] = config["payoff"][8]
         gt_df.to_csv(f"{data_dir}/{rep}/{out_dir}/ground_truth.csv", index=False)
 
         # Save overview.xlsx

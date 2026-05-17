@@ -193,8 +193,8 @@ def main():
     parser.add_argument("-samples", "--num_samples", type=int, default=100)
     parser.add_argument("-l", "--grid", type=int, default=100)
     parser.add_argument("-r", "--radius", type=int, default=1)
-    parser.add_argument("-write", "--write_freq", type=int, default=100)
-    parser.add_argument("-steps", "--steps", type=int, default=500)
+    parser.add_argument("-write", "--write_freq", type=int, default=200)
+    parser.add_argument("-steps", "--steps", type=int, default=1000)
     args = parser.parse_args()
 
     save_loc = f"{args.data_dir}/{args.strategies}"

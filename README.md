@@ -66,18 +66,25 @@ python3 analyze_synthetic.py -dir data/ode_lv_noisy
 ```
 ### On spatial data
 ```
-python3 create_abm_data.py -dir data/abm_3_strong -strats 3 -r 1 -run_cmd "python3"
-bash data/abm_3_strong/run.sh
-python3 format_abm_data.py -dir data/abm_3_strong
-bash data/abm_3_strong/fit_models.sh
-python3 analyze_synthetic.py -dir data/abm_3_strong/formatted
+python3 create_abm_data.py -dir data/abm_strong -r 1 -run_cmd "python3"
+bash data/abm_strong/run.sh
+python3 format_abm_data.py -dir data/abm_strong
+bash data/abm_strong/fit_models.sh
+python3 analyze_synthetic.py -dir data/abm_strong/formatted
 ```
 ```
-python3 create_abm_data.py -dir data/abm_3_weak -strats 3 -r 2 -run_cmd "python3"
-bash data/abm_3_weak/run.sh
-python3 format_abm_data.py -dir data/abm_3_weak
-bash data/abm_3_weak/fit_models.sh
-python3 analyze_synthetic.py -dir data/abm_3_weak/formatted
+python3 create_abm_data.py -dir data/abm_medium -r 2 -run_cmd "python3"
+bash data/abm_medium/run.sh
+python3 format_abm_data.py -dir data/abm_medium
+bash data/abm_medium/fit_models.sh
+python3 analyze_synthetic.py -dir data/abm_medium/formatted
+```
+```
+python3 create_abm_data.py -dir data/abm_weak -r 3 -run_cmd "python3"
+bash data/abm_weak/run.sh
+python3 format_abm_data.py -dir data/abm_weak
+bash data/abm_weak/fit_models.sh
+python3 analyze_synthetic.py -dir data/abm_weak/formatted
 ```
 ### On experimental data
 ```
@@ -89,17 +96,14 @@ python3 analyze_experimental.py -dir data/experimental
 
 ## Test different exponential growth windows
 ```
-python3 exponential_growth_window.py -in data/{data directory name}
+python3 exponential_growth_window.py -in data/{data directory name} -run "python3"
 bash data/{data directory name}_gr/exponential_growth_windows.sh
 python3 exponential_growth_window.py -in data -p 1
 ```
 
 ## Test ABM
 ```
-python3 abm_testing.py -strats 2 -run_cmd "python3"
 python3 abm_testing.py -strats 3 -run_cmd "python3"
-bash data/abm_test/2/run.sh
 bash data/abm_test/3/run.sh
-python3 abm_testing.py -strats 2
 python3 abm_testing.py -strats 3
 ```
