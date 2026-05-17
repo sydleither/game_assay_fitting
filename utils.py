@@ -89,7 +89,8 @@ def label_data_type(data_dir):
     if "ode_lv" in data_dir:
         return f"{noisy}Lotka-Volterra ODE"
     if "abm" in data_dir and "_" in data_dir:
-        return data_dir.split("/")[1].split("_")[1].title() + " Spatial Agent-Based Model"
+        parts = data_dir.split("/")[1].split("_")
+        return f"{parts[1]} Strategy {parts[2]} Spatial Agent-Based Model"
     return data_dir.replace("data/", "").title().replace("_", " ")
 
 

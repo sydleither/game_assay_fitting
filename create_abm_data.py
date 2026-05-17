@@ -1,4 +1,5 @@
 import argparse
+import os
 import random
 
 from utils import get_plate_structure, latin_hypercube_sample
@@ -56,7 +57,7 @@ def create_run_cmd(
                 ]
             ]
         )
-    sample_args = f"-loc {save_loc}/{s} -f {init_freq} -p {payoff}"
+    sample_args = f"-loc {save_loc} -f {init_freq} -p {payoff}"
     return f"{run_cmd} abm.py {abm_args} {sample_args}\n"
 
 
@@ -67,12 +68,12 @@ def main():
     parser.add_argument("-exp", "--experiment_name", type=str, default="raw")
     parser.add_argument("-run_cmd", "--run_cmd", type=str, default="python3")
     parser.add_argument("-reps", "--reps", type=int, default=10)
-    parser.add_argument("-strats", "--strategies", type=int, choices=[2, 3])
+    parser.add_argument("-strats", "--strategies", type=int, default=3, choices=[3])
     parser.add_argument("-samples", "--num_samples", type=int, default=20)
     parser.add_argument("-l", "--grid", type=int, default=100)
     parser.add_argument("-r", "--radius", type=int, default=1)
     parser.add_argument("-write", "--write_freq", type=int, default=10)
-    parser.add_argument("-steps", "--steps", type=int, default=100)
+    parser.add_argument("-steps", "--steps", type=int, default=200)
     args = parser.parse_args()
 
     # Mimic plate structure
@@ -87,7 +88,7 @@ def main():
         else:
             samples = sample_three_strategy(rep, args.num_samples)
         # Save configs in data directory structure mimicing game assay's
-        for s, sample in samples:
+        for s, sample in enumerate(samples):
             data_dir = f"{args.data_dir}/{rep}/{args.experiment_name}"
             for plate in [1]:
                 for i, fs in enumerate(seeding):
@@ -107,8 +108,9 @@ def main():
                             args.steps,
                         )
                         run_output.append(sample_output)
+                        os.makedirs(save_loc)
     # Run bash script with commands to run ABM simulations
-    with open(f"{save_loc}/run.sh", "w") as f:
+    with open(f"{args.data_dir}/run.sh", "w") as f:
         for line in run_output:
             f.write(line)
 

@@ -22,7 +22,7 @@ def run_experiment(save_loc, args):
     run_output = []
     for s, sample in enumerate(samples):
         sample_output = create_run_cmd(
-            save_loc,
+            f"{save_loc}/{s}",
             args.run_cmd,
             42,
             sample,
@@ -91,8 +91,9 @@ def ohtsuki_nowak_transform(payoff, radius):
 
 def plot_space(save_loc):
     coords = pd.read_csv(f"{save_loc}/coords.csv")
-    fig, ax = plt.subplots(1, 5, figsize=(25, 5))
-    for i, time in enumerate(sorted(coords["time"].unique())):
+    times = sorted(coords["time"].unique())
+    fig, ax = plt.subplots(1, len(times), figsize=(5 * len(times), 5))
+    for i, time in enumerate(times):
         coords_t = coords[coords["time"] == time]
         grid = np.zeros((100, 100), dtype=np.uint8)
         for x, y, cell_type in coords_t[["x", "y", "strategy"]].values:
@@ -118,7 +119,7 @@ def plot_fixed_point_distance(save_loc, df, strategies):
     # Aggregated plot
     fig, ax = plt.subplots(figsize=(4, 4))
     sns.boxplot(data=df, x="Payoff Matrix", y="Distance", color="pink", linecolor="black", ax=ax)
-    sns.swarmplot(data=df, x="Payoff Matrix", y="Distance", color="black", alpha=0.5, ax=ax)
+    sns.stripplot(data=df, x="Payoff Matrix", y="Distance", color="black", alpha=0.5, ax=ax)
     ax.set(title=f"{strategies} Strategy Distances Between\nAnalytical and Empirical Fixed Point")
     fig.tight_layout()
     fig.patch.set_alpha(0)
@@ -158,8 +159,8 @@ def analyze_experiment(save_loc, strategies):
         df_s = df_s[df_s["strategy"] == 0]
         df_s["frequency"] = df_s["frequency"] / config["grid"] ** 2
         if payoff.shape[0] == 2:
-            df_s["fp"] = get_two_strategy_fp(classify_two_strategy_replicator(payoff))
-            df_s["on fp"] = get_two_strategy_fp(classify_two_strategy_replicator(on_payoff))
+            df_s["fp"] = get_two_strategy_fp(*classify_two_strategy_replicator(payoff))
+            df_s["on fp"] = get_two_strategy_fp(*classify_two_strategy_replicator(on_payoff))
             df_s["Dynamic"] = classify_game(
                 payoff[0, 0],
                 payoff[0, 1],

@@ -8,7 +8,7 @@ import pandas as pd
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-dir", "--data_dir", type=str, default="data/abm")
+    parser.add_argument("-dir", "--data_dir", type=str)
     parser.add_argument("-in", "--in_dir", type=str, default="raw")
     parser.add_argument("-out", "--out_dir", type=str, default=".")
     parser.add_argument("-run", "--run_cmd", type=str, default="python3")
@@ -28,7 +28,8 @@ def main():
         reps.append(rep)
 
         # Create layout.xlsx
-        os.makedirs(f"{data_dir}/{rep}/{out_dir}/layout_files")
+        if not os.path.exists(f"{data_dir}/{rep}/{out_dir}/layout_files"):
+            os.makedirs(f"{data_dir}/{rep}/{out_dir}/layout_files")
         layout = []
         for _ in range(3):
             layout.append({j: 0.0 for j in range(2, 7)})
@@ -48,14 +49,12 @@ def main():
                 out_loc = (
                     f"{data_dir}/{rep}/{out_dir}/{exp_new}/results_stitched_images_plate{plate}"
                 )
-                os.makedirs(out_loc)
+                if not os.path.exists(out_loc):
+                    os.makedirs(out_loc)
                 for well in os.listdir(f"{full_path}/{plate}"):
                     out_name = f"segmentation_results_well_{well}"
                     # Read in coordinates
-                    df = pd.read_csv(
-                        f"{full_path}/{plate}/{well}/coords.csv",
-                        usecols=[0, 1, 2, 3],
-                    )
+                    df = pd.read_csv(f"{full_path}/{plate}/{well}/coords.csv")
                     # Save ground truth data
                     config = json.load(open(f"{full_path}/{plate}/{well}/config.json"))
                     config["WellId"] = well
@@ -63,10 +62,12 @@ def main():
                     config["Experiment"] = exp_new
                     ground_truth.append(config)
                     # Save counts file
-                    df["time"] = pd.factorize(df["time"])[0] + 1
-                    counts = df.groupby(["time", "type"]).count().reset_index()
-                    counts = pd.pivot(counts, index="time", columns="type", values="x")
+                    counts = pd.read_csv(f"{full_path}/{plate}/{well}/summary.csv")
+                    counts = pd.pivot(counts, index="time", columns="strategy", values="frequency")
                     counts = counts.reset_index()
+                    counts = counts[counts["time"].isin(df["time"])]
+                    counts["time"] = pd.factorize(counts["time"])[0] + 1
+                    df["time"] = pd.factorize(df["time"])[0] + 1
                     if 0 not in counts.columns:
                         counts[0] = 0
                     if 1 not in counts.columns:
@@ -88,10 +89,10 @@ def main():
                         {"time": "ImageNumber", "x": "Location_Center_X", "y": "Location_Center_Y"},
                         axis=1,
                     )
-                    sensitive = df[df["type"] == 0].copy()
+                    sensitive = df[df["strategy"] == 0].copy()
                     sensitive["ObjectNumber"] = sensitive.groupby("ImageNumber").cumcount() + 1
                     sensitive["Number_Object_Number"] = sensitive["ObjectNumber"]
-                    resistant = df[df["type"] == 1].copy()
+                    resistant = df[df["strategy"] == 1].copy()
                     resistant["ObjectNumber"] = resistant.groupby("ImageNumber").cumcount() + 1
                     resistant["Number_Object_Number"] = resistant["ObjectNumber"]
                     sensitive.to_csv(f"{out_loc}/{out_name}_locations_green.csv", index=False)
@@ -121,7 +122,8 @@ def main():
                 }
             )
             # Make images directory
-            os.mkdir(f"{data_dir}/{rep}/{out_dir}/{exp_new}/images")
+            if not os.path.exists(f"{data_dir}/{rep}/{out_dir}/{exp_new}/images"):
+                os.mkdir(f"{data_dir}/{rep}/{out_dir}/{exp_new}/images")
 
         # Save ground truth
         gt_df = pd.DataFrame(ground_truth)
