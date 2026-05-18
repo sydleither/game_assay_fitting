@@ -8,10 +8,10 @@ from utils import get_plate_structure, latin_hypercube_sample
 def sample_three_strategy(seed, num_samples):
     samples = latin_hypercube_sample(
         num_samples,
-        ["P_00", "P_01", "P_02", "P_10", "P_11", "P_12", "P_20", "P_21"],
-        [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.0, 0.0],
-        [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05],
-        [False] * 8,
+        ["P_00", "P_01", "P_02", "P_10", "P_11", "P_12"],
+        [0.05, 0.05, 0.05, 0.05, 0.05, 0.05],
+        [0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+        [False] * 6,
         seed=seed,
     )
     return samples
@@ -51,8 +51,8 @@ def create_run_cmd(
                     sample["P_10"],
                     sample["P_11"],
                     sample["P_12"],
-                    sample["P_20"],
-                    sample["P_21"],
+                    0,
+                    0,
                     0,
                 ]
             ]
