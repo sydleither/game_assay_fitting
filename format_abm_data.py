@@ -127,15 +127,18 @@ def main():
 
         # Save ground truth
         gt_df = pd.DataFrame(ground_truth)
-        gt_df["p_SS"] = config["payoff"][0]
-        gt_df["p_SR"] = config["payoff"][1]
-        gt_df["p_SE"] = config["payoff"][2]
-        gt_df["p_RS"] = config["payoff"][3]
-        gt_df["p_RR"] = config["payoff"][4]
-        gt_df["p_RE"] = config["payoff"][5]
-        gt_df["p_ES"] = config["payoff"][6]
-        gt_df["p_ER"] = config["payoff"][7]
-        gt_df["p_EE"] = config["payoff"][8]
+        payoff_df = pd.DataFrame(gt_df["payoff"].tolist(), index=gt_df.index)
+        payoff_df.columns = [f'p_{i}' for i in range(payoff_df.shape[1])]
+        gt_df = gt_df.drop(columns='payoff').join(payoff_df)
+        gt_df["p_SS"] = gt_df["p_0"]
+        gt_df["p_SR"] = gt_df["p_1"]
+        gt_df["p_SE"] = gt_df["p_2"]
+        gt_df["p_RS"] = gt_df["p_3"]
+        gt_df["p_RR"] = gt_df["p_4"]
+        gt_df["p_RE"] = gt_df["p_5"]
+        gt_df["p_ES"] = gt_df["p_6"]
+        gt_df["p_ER"] = gt_df["p_7"]
+        gt_df["p_EE"] = gt_df["p_8"]
         gt_df.to_csv(f"{data_dir}/{rep}/{out_dir}/ground_truth.csv", index=False)
 
         # Save overview.xlsx

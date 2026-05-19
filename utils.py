@@ -96,6 +96,8 @@ def label_data_type(data_dir):
     if "abm" in data_dir and "_" in data_dir:
         parts = data_dir.split("/")[1].split("_")
         return f"{parts[1]} Spatial Agent-Based Model"
+    if "abm" in data_dir:
+        return "Agent-Based Model"
     return data_dir.replace("data/", "").title().replace("_", " ")
 
 
