@@ -1,0 +1,3 @@
+[submodule "EGT_ABM"]
+	path = EGT_ABM
+	url = git@github.com:sydleither/EGT_ABM.git

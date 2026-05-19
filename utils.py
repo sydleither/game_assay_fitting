@@ -4,9 +4,13 @@ from string import ascii_uppercase
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.linalg import eigvals
-from scipy.optimize import approx_fprime
 
+from EGT_ABM.utils import (
+    classify_three_strategy_dynamic,
+    classify_three_strategy_replicator,
+    classify_two_strategy_dynamic,
+    classify_two_strategy_replicator,
+)
 from game_assay.game_analysis_utils import (
     optimize_growth_rate_window_per_exp,
     optimize_growth_rate_window_per_well,
@@ -64,27 +68,6 @@ def get_parameter_names():
         "r_S",
         "r_R",
     ]
-
-
-def get_colors():
-    return {
-        "Sensitive Wins": "#4C956C",
-        "Coexistence": "#C28367",
-        "Bistability": "#047495",
-        "Resistant Wins": "#EF7C8E",
-        # "Neutrality": "#767567",
-    }
-
-
-def latin_hypercube_sample(num_samples, param_names, lower_bounds, upper_bounds, ints, seed):
-    sampler = stats.qmc.LatinHypercube(d=len(lower_bounds), seed=seed)
-    unscaled_sample = sampler.random(n=num_samples)
-    sample = stats.qmc.scale(unscaled_sample, lower_bounds, upper_bounds).tolist()
-    sampled_params = [
-        {param_names[i]: round(s[i]) if ints[i] else s[i] for i in range(len(s))}
-        for s in sample
-    ]
-    return sampled_params
 
 
 def label_data_type(data_dir):
@@ -277,127 +260,25 @@ def get_fit_df(data_dir):
     return df
 
 
-def classify_three_strategy_replicator(P):
-    def check_edge(P, i, j):
-        mix_denom = P[i][i] - P[j][i] - P[i][j] + P[j][j]
-        if mix_denom != 0:
-            mix = (-P[i][j] + P[j][j]) / mix_denom
-            mix_stable = mix_denom < 0
-        else:
-            mix = np.nan
-            mix_stable = np.nan
-        if mix <= 0 or mix >= 1:
-            mix = np.nan
-            mix_stable = np.nan
-        return mix, mix_stable
-
-    def replicator(t, x, P):
-        return x * (P @ x - x.T @ P @ x)
-
-    def f(x):
-        return replicator(None, np.array([x[0], x[1], 1 - x[0] - x[1]]), P)[:2]
-
-    def interior_stability(mix_all, P):
-        x_eq = np.array(mix_all[:2])
-        J = np.array([approx_fprime(x_eq, lambda x: f(x)[i], 1e-6) for i in range(2)])
-        eigs = eigvals(J)
-        return bool(np.all(np.real(eigs) < 0))
-
-    # Corners
-    all_0_stable = P[0][0] > P[1][0] and P[0][0] > P[2][0]
-    all_1_stable = P[1][1] > P[0][1] and P[1][1] > P[2][1]
-    all_2_stable = P[2][2] > P[0][2] and P[2][2] > P[1][2]
-    # Edges
-    mix_01, mix_01_stable = check_edge(P, 0, 1)
-    mix_02, mix_02_stable = check_edge(P, 0, 2)
-    mix_12, mix_12_stable = check_edge(P, 1, 2)
-    # Interior
-    eqs_lhs = np.array([P[0] - P[1], P[0] - P[2], [1, 1, 1]])
-    eqs_rhs = np.array([0, 0, 1])
-    try:
-        mix_all = np.linalg.solve(eqs_lhs, eqs_rhs)
-        mix_all = (
-            mix_all if np.all(mix_all >= 0) and np.all(mix_all <= 1) else [np.nan, np.nan, np.nan]
-        )
-    except np.linalg.LinAlgError:
-        mix_all = [np.nan, np.nan, np.nan]
-    mix_all_stable = np.nan
-    if not np.any(np.isnan(mix_all)):
-        mix_all_stable = interior_stability(mix_all, P)
-    # Return
-    return (
-        [
-            (1, 0, 0),
-            (0, 1, 0),
-            (0, 0, 1),
-            (mix_01, 1 - mix_01, 0),
-            (mix_02, 0, 1 - mix_02),
-            (0, mix_12, 1 - mix_12),
-            mix_all,
-        ],
-        [
-            all_0_stable,
-            all_1_stable,
-            all_2_stable,
-            mix_01_stable,
-            mix_02_stable,
-            mix_12_stable,
-            mix_all_stable,
-        ],
-    )
-
-
-def classify_three_strategy_dynamic(stable):
-    stable_points = sum(1 for x in stable if x and not np.isnan(x))
-    players = [
-        "Sensitive",
-        "Resistant",
-        "Empty",
-        "Sensitive and Resistant",
-        "Sensitive and Empty",
-        "Resistant and Empty",
-        "All",
-    ]
-    if stable_points == 0:
-        return "Neutrality"
-    elif stable_points == 1:
-        for i in range(len(stable)):
-            if stable[i] and not np.isnan(stable[i]):
-                if 0 <= i < 3:
-                    return f"{players[i]} Wins"
-                if 3 <= i <= 6:
-                    return "Coexistence"  # f"coexistence: {players[i]}"
-    else:
-        # outcome = ", ".join(
-        #     [players[p] for p in range(len(stable)) if stable[p] and not np.isnan(stable[p])]
-        # )
-        return "Bistability"  # f"bistability: {outcome}"
-
-
-def classify_two_strategy_dynamic(a, b, c, d):
-    if a > c and b > d:
-        return "Sensitive Wins"
-    if c > a and b > d:
-        return "Coexistence"
-    if a > c and d > b:
-        return "Bistability"
-    if c > a and d > b:
-        return "Resistant Wins"
-    return "Neutrality"
-
-
 def classify_game(p_ss, p_sr, p_se, p_rs, p_rr, p_re, p_es, p_er, p_ee):
     # Not a game
-    if np.any(np.isnan([p_ss, p_sr, p_rs, p_rr])):
+    if np.all(np.isnan([p_ss, p_sr, p_rs, p_rr])):
         return np.nan
     # Two strategy game
-    if np.any(np.isnan([p_se, p_re, p_es, p_er, p_ee])):
-        return classify_two_strategy_dynamic(p_ss, p_sr, p_rs, p_rr)
+    if np.all(np.isnan([p_se, p_re, p_es, p_er, p_ee])):
+        payoff = np.array([p_ss, p_sr, p_rs, p_rr]).reshape(2, 2)
+        _, stabilities = classify_two_strategy_replicator(payoff)
+        dynamic = classify_two_strategy_dynamic(stabilities)
     # Three strategy game
-    _, stabilities = classify_three_strategy_replicator(
-        np.array([p_ss, p_sr, p_se, p_rs, p_rr, p_re, p_es, p_er, p_ee]).reshape(3, 3)
-    )
-    return classify_three_strategy_dynamic(stabilities)
+    else:
+        payoff = np.array([p_ss, p_sr, p_se, p_rs, p_rr, p_re, p_es, p_er, p_ee]).reshape(3, 3)
+        _, stabilities = classify_three_strategy_replicator(payoff)
+        dynamic = classify_three_strategy_dynamic(stabilities)
+    # Format dyanmic
+    if "Coexistence" in dynamic or "Bistability" in dynamic:
+        dynamic = dynamic.split(" ")[0]
+    dynamic = dynamic.replace("0", "Sensitive").replace("1", "Resistant")
+    return dynamic
 
 
 def classify_lv_dynamic(r_S, r_R, a_SS, a_SR, a_RS, a_RR):

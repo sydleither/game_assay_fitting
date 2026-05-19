@@ -258,7 +258,7 @@ def main():
     parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
     parser.add_argument("-exp", "--exp_name", type=str, default=None)
     parser.add_argument("-model", "--model", type=str, choices=list(get_models()))
-    parser.add_argument("-window", "--window", type=str, default="none")
+    parser.add_argument("-window", "--window", type=str, default="per_exp")
     args = parser.parse_args()
 
     # Fit model and save results

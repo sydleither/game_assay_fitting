@@ -2,7 +2,8 @@ import argparse
 import os
 import random
 
-from utils import get_plate_structure, latin_hypercube_sample
+from utils import get_plate_structure
+from EGT_ABM.utils import create_run_cmd, latin_hypercube_sample
 
 
 def sample_three_strategy(seed, num_samples):
@@ -27,38 +28,6 @@ def sample_two_strategy(seed, num_samples):
         seed=seed,
     )
     return samples
-
-
-def create_run_cmd(
-    save_loc, run_cmd, seed, sample, s, strategies, fs, grid, radius, write_freq, steps
-):
-    abm_args = f"-seed {seed} -l {grid} -r {radius} -write {write_freq} -steps {steps}"
-    if strategies == 2:
-        init_freq = " ".join([str(x) for x in [fs, 1 - fs]])
-        payoff = " ".join(
-            [str(x) for x in [sample["P_00"], sample["P_01"], sample["P_10"], sample["P_11"]]]
-        )
-    else:
-        empty = random.uniform(0.9, 0.95)
-        init_freq = " ".join([str(x) for x in [(1 - empty) * fs, (1 - empty) * (1 - fs), empty]])
-        payoff = " ".join(
-            [
-                str(x)
-                for x in [
-                    sample["P_00"],
-                    sample["P_01"],
-                    sample["P_02"],
-                    sample["P_10"],
-                    sample["P_11"],
-                    sample["P_12"],
-                    0,
-                    0,
-                    0,
-                ]
-            ]
-        )
-    sample_args = f"-loc {save_loc} -f {init_freq} -p {payoff}"
-    return f"{run_cmd} abm.py {abm_args} {sample_args}\n"
 
 
 def main():
@@ -94,18 +63,30 @@ def main():
                 for i, fs in enumerate(seeding):
                     for j, row in enumerate(rowids):
                         save_loc = f"{data_dir}/{s}/{plate}/{row}{colids[i]}"
+                        if args.strategies == 2:
+                            init_freq = [fs, 1 - fs]
+                        else:
+                            init_empty = random.uniform(0.9, 0.95)
+                            init_freq = [
+                                (1 - init_empty) * fs,
+                                (1 - init_empty) * (1 - fs),
+                                init_empty,
+                            ]
+                            sample["P_20"] = 0.0
+                            sample["P_21"] = 0.0
+                            sample["P_22"] = 0.0
                         sample_output = create_run_cmd(
                             save_loc,
                             args.run_cmd,
                             j,
                             sample,
-                            s,
                             args.strategies,
-                            fs,
+                            init_freq,
                             args.grid,
                             args.radius,
                             args.write_freq,
                             args.steps,
+                            "EGT_ABM"
                         )
                         run_output.append(sample_output)
                         os.makedirs(save_loc)

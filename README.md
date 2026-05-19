@@ -100,10 +100,3 @@ python3 exponential_growth_window.py -in data/{data directory name} -run "python
 bash data/{data directory name}_gr/exponential_growth_windows.sh
 python3 exponential_growth_window.py -in data -p 1
 ```
-
-## Test ABM
-```
-python3 abm_testing.py -strats 3 -run_cmd "python3"
-bash data/abm_test/3/run.sh
-python3 abm_testing.py -strats 3
-```

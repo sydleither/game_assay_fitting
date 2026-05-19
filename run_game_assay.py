@@ -273,7 +273,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dir", "--data_dir", type=str, default="data/experimental")
     parser.add_argument("-exp", "--exp_name", type=str, default=None)
-    parser.add_argument("-window", "--window", type=str, default="none")
+    parser.add_argument("-window", "--window", type=str, default="per_exp")
     parser.add_argument("-p", "--plot", type=int, default=1, choices=[0, 1])
     args = parser.parse_args()
 
