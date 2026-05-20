@@ -36,6 +36,18 @@ optimiser_kws = {
 }
 
 
+def get_colors(include_neutral=False):
+    colors = {
+        "Sensitive Wins": "#4C956C",
+        "Coexistence": "#C28367",
+        "Bistability": "#047495",
+        "Resistant Wins": "#EF7C8E",
+    }
+    if include_neutral:
+        colors["Neutrality"] = "#767567"
+    return colors
+
+
 def get_cell_types(exp_name):
     parts = exp_name.split("_")
     s = f"{parts[1]}-{parts[2].lower()}"
@@ -78,7 +90,7 @@ def label_data_type(data_dir):
         return f"{noisy}Lotka-Volterra ODE"
     if "abm" in data_dir and "_" in data_dir:
         parts = data_dir.split("/")[1].split("_")
-        return f"{parts[1]} Spatial Agent-Based Model"
+        return f"{parts[1].title()} Spatial Agent-Based Model"
     if "abm" in data_dir:
         return "Agent-Based Model"
     return data_dir.replace("data/", "").title().replace("_", " ")
@@ -274,9 +286,8 @@ def classify_game(p_ss, p_sr, p_se, p_rs, p_rr, p_re, p_es, p_er, p_ee):
         payoff = np.array([p_ss, p_sr, p_se, p_rs, p_rr, p_re, p_es, p_er, p_ee]).reshape(3, 3)
         _, stabilities = classify_three_strategy_replicator(payoff)
         dynamic = classify_three_strategy_dynamic(stabilities)
-    # Format dyanmic
-    if "Coexistence" in dynamic or "Bistability" in dynamic:
-        dynamic = dynamic.split(" ")[0]
+        if "Coexistence" in dynamic or "Bistability" in dynamic:
+            dynamic = dynamic.split(" ")[0][:-1]
     dynamic = dynamic.replace("0", "Sensitive").replace("1", "Resistant")
     return dynamic
 

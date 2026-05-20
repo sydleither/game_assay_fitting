@@ -102,20 +102,13 @@ def main():
     plot_accuracy("data", df)
     plot_entropy("data", df)
 
-    # print("Synthetic Data")
-    # print(analyze_significance(
-    #     df=df[df["Data Type"] != "Experimental"], 
-    #     group_col="Exponential Growth Window Strategy", 
-    #     value_col="Accuracy", 
-    #     control_label="None"
-    # ))
-    # print("\nExperimental Data")
-    # print(analyze_significance(
-    #     df=df[df["Data Type"] == "Experimental"], 
-    #     group_col="Exponential Growth Window Strategy", 
-    #     value_col="Entropy", 
-    #     control_label="Per-Cell-Type"
-    # ))
+    print("Synthetic Data")
+    print(analyze_significance(
+        df=df[df["Data Type"] != "Experimental"], 
+        group_col="Model", 
+        value_col="Accuracy", 
+        control_label="Game Assay"
+    ))
 
 
 if __name__ == "__main__":
