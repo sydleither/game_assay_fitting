@@ -28,7 +28,7 @@ def plot_confusion_matrices(save_loc, df, data_type):
         return s
 
     models = df["Model"].unique()
-    labels = sorted(df["Dynamic"].unique())
+    labels = sorted(df["Dynamic True"].unique())
     fig, ax = plt.subplots(
         ncols=len(models) + 1,
         gridspec_kw=dict(width_ratios=[1] * len(models) + [0.1]),

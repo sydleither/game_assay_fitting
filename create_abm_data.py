@@ -30,7 +30,7 @@ def main():
             args.num_samples,
             ["P_00", "P_01", "P_10", "P_11"],
             [2, 2, 2, 2],
-            [4, 4, 4, 4],
+            [10, 10, 10, 10],
             [False] * 4,
             seed=rep,
         )
@@ -47,8 +47,8 @@ def main():
                             (1 - init_empty) * (1 - fs),
                             init_empty,
                         ]
-                        sample["P_02"] = 3
-                        sample["P_12"] = 3
+                        sample["P_02"] = sample["P_00"]
+                        sample["P_12"] = sample["P_11"]
                         sample["P_20"] = 1
                         sample["P_21"] = 1
                         sample["P_22"] = 0
@@ -57,7 +57,7 @@ def main():
                             args.run_cmd,
                             j,
                             sample,
-                            args.strategies,
+                            3,
                             init_freq,
                             args.grid,
                             args.radius,

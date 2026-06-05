@@ -216,7 +216,7 @@ def write_run_script(in_dir, out_dir, run_cmd):
             for rep in os.listdir(in_dir):
                 if os.path.isfile(f"{in_dir}/{rep}"):
                     continue
-                for exp in os.listdir(f"{in_dir}/{rep}")[::2]:
+                for exp in os.listdir(f"{in_dir}/{rep}"):
                     if os.path.isfile(f"{in_dir}/{rep}/{exp}") or not exp.startswith("2"):
                         continue
                     os.makedirs(f"{out_dir}/{window}/{rep}/{exp}/images")
