@@ -34,7 +34,6 @@ def plot_accuracy(save_loc, df):
         palette="Set2",
         col_wrap=3,
     )
-    facet.tick_params("x", rotation=45)
     facet.figure.suptitle(
         "Qualitative Interaction Classification Accuracy across Synthetic Data Types, Models, and Exponential Growth Windows"
     )
@@ -51,7 +50,6 @@ def plot_accuracy(save_loc, df):
         color="#8da0cb",
         ax=ax,
     )
-    ax.tick_params("x", rotation=45)
     ax.set_title(
         "Qualitative Interaction Classification Accuracy\nacross Exponential Growth Windows for Synthetic Data"
     )
@@ -71,7 +69,6 @@ def plot_entropy(save_loc, df):
         hue="Exponential Growth Window Strategy",
         palette="Set2",
     )
-    facet.tick_params("x", rotation=45)
     facet.figure.suptitle(
         "Experimental Qualitative Interaction Classification Entropy\nacross Model and Exponential Growth Window"
     )
@@ -88,7 +85,6 @@ def plot_entropy(save_loc, df):
         color="#fc8d62",
         ax=ax,
     )
-    ax.tick_params("x", rotation=45)
     ax.set_title(
         "Experimental Qualitative Interaction Classification Entropy\nacross Exponential Growth Window"
     )

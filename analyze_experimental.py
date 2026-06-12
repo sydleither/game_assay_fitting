@@ -6,7 +6,12 @@ import pandas as pd
 import seaborn as sns
 from scipy.stats import entropy
 
-from utils import get_colors, get_fit_df, label_qualitative_dynamics, format_for_plotting
+from utils import (
+    get_colors,
+    get_fit_df,
+    label_qualitative_dynamics,
+    format_for_plotting,
+)
 
 
 def plot_parameter_ranges(data_dir, df, data_type="Experimental"):
@@ -42,7 +47,9 @@ def plot_parameter_ranges(data_dir, df, data_type="Experimental"):
     facet_grid.figure.suptitle(f"Parameter Ranges of Models Fit on {data_type} Data")
     facet_grid.figure.patch.set_alpha(0.0)
     facet_grid.tight_layout()
-    facet_grid.savefig(f"{data_dir}/parameters_{data_type}.png", bbox_inches="tight", dpi=200)
+    facet_grid.savefig(
+        f"{data_dir}/parameters_{data_type}.png", bbox_inches="tight", dpi=200
+    )
     plt.close()
 
 
@@ -57,7 +64,7 @@ def plot_dynamics(save_loc, df, data_type="Experimental"):
     df["Experiment"] = df["Experiment"].map({s: i for i, s in enumerate(df["Experiment"].unique())})
     df = df.pivot(index="Experiment", columns="Model", values="Dynamic").replace(dynamics_to_int)
 
-    fig, ax = plt.subplots(figsize=(4, 4))
+    fig, ax = plt.subplots(figsize=(6, 4))
     res = sns.heatmap(
         df,
         cmap=custom_cmap,
@@ -71,11 +78,10 @@ def plot_dynamics(save_loc, df, data_type="Experimental"):
     colorbar.set_ticklabels(dynamics)
     colorbar.set_label("Dynamics")
     ax.set_title(f"Qualitative Interaction Classification of {data_type} Data")
-    ax.tick_params("x", rotation=90)
     fig.patch.set_alpha(0.0)
     fig.tight_layout()
     fig.savefig(
-        f"{save_loc}/classifications_{data_type.strip()}.png",
+        f"{save_loc}/classifications_{data_type}.png",
         bbox_inches="tight",
         dpi=200,
     )
@@ -94,7 +100,6 @@ def plot_entropy(save_loc, df, data_type="Experimental"):
     fig, ax = plt.subplots(figsize=(4, 4))
     sns.barplot(df, x="Model", y="Entropy", color="#fc8d62", ax=ax)
     ax.set_title(f"Entropy of Qualitative Interaction Classifications\nfor {data_type} Data")
-    ax.tick_params("x", rotation=45)
     fig.patch.set_alpha(0.0)
     fig.tight_layout()
     fig.savefig(f"{save_loc}/entropy_{data_type}.png", bbox_inches="tight", dpi=200)
@@ -116,7 +121,7 @@ def main():
 
     # Plot results
     plot_entropy(args.data_dir, df)
-    plot_dynamics(args.data_dir, df, data_type="\nExperimental")
+    plot_dynamics(args.data_dir, df)
     plot_parameter_ranges(args.data_dir, df)
 
 

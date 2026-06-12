@@ -30,7 +30,7 @@ def main():
             args.num_samples,
             ["P_00", "P_01", "P_10", "P_11"],
             [2, 2, 2, 2],
-            [10, 10, 10, 10],
+            [4, 4, 4, 4],
             [False] * 4,
             seed=rep,
         )
@@ -47,15 +47,15 @@ def main():
                             (1 - init_empty) * (1 - fs),
                             init_empty,
                         ]
-                        sample["P_02"] = sample["P_00"]
-                        sample["P_12"] = sample["P_11"]
+                        sample["P_02"] = 3
+                        sample["P_12"] = 3
                         sample["P_20"] = 1
                         sample["P_21"] = 1
                         sample["P_22"] = 0
                         sample_output = create_run_cmd(
                             save_loc,
                             args.run_cmd,
-                            j,
+                            f"{j+1}{s}",
                             sample,
                             3,
                             init_freq,

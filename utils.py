@@ -85,12 +85,12 @@ def get_parameter_names():
 def label_data_type(data_dir):
     noisy = "Noisy " if "noisy" in data_dir else ""
     if "ode_egt" in data_dir:
-        return f"{noisy}Exponential Growth ODE"
+        return f"{noisy}Replicator Dynamics ODE"
     if "ode_lv" in data_dir:
         return f"{noisy}Lotka-Volterra ODE"
-    if "abm" in data_dir and "_" in data_dir:
-        parts = data_dir.split("/")[1].split("_")
-        return f"{parts[1].title()} Spatial Agent-Based Model"
+    # if "abm" in data_dir and "_" in data_dir:
+    #     parts = data_dir.split("/")[1].split("_")
+    #     return f"{parts[1].title()} Spatial Agent-Based Model"
     if "abm" in data_dir:
         return "Agent-Based Model"
     return data_dir.replace("data/", "").title().replace("_", " ")
@@ -380,6 +380,10 @@ def format_for_plotting(df):
         new_param_names[param] = new_param
     df = df.rename(new_param_names, axis=1)
     # Renaming replicator to exponential growth
-    df.loc[df["Model"] == "Replicator", "Model"] = "Exponential Growth ODE"
-    df.loc[df["Model"] == "Lotka-Volterra", "Model"] = "Lotka-Volterra ODE"
+    df.loc[df["Model"] == "Replicator", "Model"] = "Replicator\nDynamics\nODE"
+    df.loc[df["Model"] == "Lotka-Volterra", "Model"] = "Lotka\nVolterra\nODE"
     return df
+
+
+def save_data_type(data_type):
+    return data_type.replace("\n", "-").replace(" ", "-")

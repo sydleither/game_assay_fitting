@@ -9,10 +9,12 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix
 
 from utils import (
+    analyze_significance,
     format_for_plotting,
     get_fit_df,
     label_data_type,
     label_qualitative_dynamics,
+    save_data_type,
 )
 
 
@@ -27,6 +29,7 @@ def plot_confusion_matrices(save_loc, df, data_type):
             return s[:-3]
         return s
 
+    df["Model"] = df["Model"].str.replace("\n", " ")
     models = df["Model"].unique()
     labels = sorted(df["Dynamic True"].unique())
     fig, ax = plt.subplots(
@@ -102,7 +105,9 @@ def plot_confusion_matrices(save_loc, df, data_type):
     ax[-1].set(ylabel="Proportion of True Classification")
     fig.suptitle(f"Normalized Confusion Matrices for {data_type} Data")
     fig.patch.set_alpha(0.0)
-    fig.savefig(f"{save_loc}/confusion_{data_type}.png", bbox_inches="tight", dpi=200)
+    fig.savefig(
+        f"{save_loc}/confusion_{save_data_type(data_type)}.png", bbox_inches="tight", dpi=200
+    )
     plt.close()
 
 
@@ -115,11 +120,12 @@ def plot_accuracy(save_loc, df, data_type):
         color="#8da0cb",
         ax=ax,
     )
-    ax.tick_params("x", rotation=45)
     ax.set(title=f"Qualitative Interaction Classification Accuracy\non {data_type} Data")
     fig.patch.set_alpha(0.0)
     fig.tight_layout()
-    fig.savefig(f"{save_loc}/accuracy_{data_type}.png", bbox_inches="tight", dpi=200)
+    fig.savefig(
+        f"{save_loc}/accuracy_{save_data_type(data_type)}.png", bbox_inches="tight", dpi=200
+    )
     plt.close()
 
 
@@ -129,12 +135,11 @@ def plot_true_class_balance(save_loc, df, data_type):
         df[df["Model"] == "Ground Truth"].groupby(["Dynamic", "Replicate"]).size().reset_index()
     )
     sns.barplot(counts, x="Dynamic", y=0, color="#b3b3b3", ax=ax)
-    ax.tick_params("x", rotation=45)
     ax.set(title=f"Class Balance of Generated\n{data_type} Data")
     ax.set(ylabel="Count Per-Replicate")
     fig.patch.set_alpha(0.0)
     fig.tight_layout()
-    fig.savefig(f"{save_loc}/balance_{data_type}.png", bbox_inches="tight", dpi=200)
+    fig.savefig(f"{save_loc}/balance_{save_data_type(data_type)}.png", bbox_inches="tight", dpi=200)
     plt.close()
 
 
@@ -174,6 +179,14 @@ def main():
     plot_true_class_balance(save_loc, df, data_type)
     plot_accuracy(save_loc, df_gt, data_type)
     plot_confusion_matrices(save_loc, df_gt, data_type)
+
+    # Statistics
+    print(analyze_significance(
+        df=df_gt, 
+        group_col="Model", 
+        value_col="Accuracy", 
+        control_label="Game Assay"
+    ))
 
 
 if __name__ == "__main__":

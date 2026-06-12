@@ -10,12 +10,12 @@ from utils import (
     format_for_plotting,
     get_fit_df,
     label_data_type,
-    label_qualitative_dynamics,
+    label_qualitative_dynamics
 )
 
 
 def plot_accuracy(save_loc, df):
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(4, 4))
     sns.barplot(
         data=df[df["Data Type"] != "Experimental"],
         x="Model",
@@ -23,7 +23,6 @@ def plot_accuracy(save_loc, df):
         color="#8da0cb",
         ax=ax,
     )
-    ax.tick_params("x", rotation=45)
     ax.set_title(
         "Qualitative Interaction Classification Accuracy\nacross Models Fit on Synthetic Data"
     )
@@ -34,7 +33,7 @@ def plot_accuracy(save_loc, df):
 
 
 def plot_entropy(save_loc, df):
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(4, 4))
     sns.barplot(
         data=df[df["Data Type"] == "Experimental"],
         x="Model",
@@ -42,7 +41,6 @@ def plot_entropy(save_loc, df):
         color="#fc8d62",
         ax=ax,
     )
-    ax.tick_params("x", rotation=45)
     ax.set_title(
         "Qualitative Interaction Classification Entropy\nacross Models Fit on Experimental Data"
     )
@@ -98,7 +96,7 @@ def main():
     df = get_data()
     df = df.sort_values(by=["Data Type", "Model", "Replicate", "Experiment"])
 
-    compare_noise("data", df.copy())
+    #compare_noise("data", df.copy())
     plot_accuracy("data", df)
     plot_entropy("data", df)
 
